@@ -13,6 +13,8 @@ public class DataManager {
     public HashMap<String, ChunkManager> messages;
 
     public DataManager(String Root){
+        Root = folderPathNormalizer(Root);
+
         this.dmMI = new DataManagerMetaInfo(Root);
 
         this.documents = new HashMap<String, Document>();
@@ -24,6 +26,8 @@ public class DataManager {
 
     public DataManager(String Root, boolean fetch) {
         DataManagerMetaInfo dmmi = null;
+        Root = folderPathNormalizer(Root);
+
 
         if (fetch) {
             dmmi = fetchDMMI(Root);
@@ -44,7 +48,6 @@ public class DataManager {
 
         }
     }
-
     /*
     * Constructs a File object that uses a Data.ChunkManager to divide the file provided by the combination of localFilePath/filename
     * into chunks that can be found on the folder root/MacAddress/(FileHash)/Chunks.
@@ -52,40 +55,68 @@ public class DataManager {
     * */
     public void newDocument(String MacAddress, String localDocumentPath, String documentName, int maxDatagramSize){
         checkFolders(MacAddress);
+        localDocumentPath = folderPathNormalizer(localDocumentPath);
 
         Document f = new Document(this.dmMI.Root, MacAddress, localDocumentPath, documentName, maxDatagramSize);
         String hash = f.getHash();
 
-        registerMacHashs(MacAddress, hash);
-        //guardar o file
-        this.documents.put(hash, f);
+        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+            registerMacHashs(MacAddress, hash);
+            //guardar o file
+            this.documents.put(hash, f);
 
-        //assinala que o ficheiro esta completo
-        this.dmMI.isDocumentFull.put(hash, true);
+            //assinala que o ficheiro esta completo
+            this.dmMI.isDocumentFull.put(hash, true);
 
-        //guarda o nome do ficheiro
-        this.dmMI.documentsNames.put(hash, documentName);
+            //guarda o nome do ficheiro
+            this.dmMI.documentsNames.put(hash, documentName);
 
-        updateDataManagerMetaInfoFile();
+            updateDataManagerMetaInfoFile();
+        }
+    }
+
+    public void newDocument(String MacAddress, String localDocumentPath, String documentName, int maxDatagramSize, int maxChunksLoadedAtaTime){
+        checkFolders(MacAddress);
+        localDocumentPath = folderPathNormalizer(localDocumentPath);
+
+        Document f = new Document(this.dmMI.Root, MacAddress, localDocumentPath, documentName, maxDatagramSize, maxChunksLoadedAtaTime);
+        String hash = f.getHash();
+
+        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+            registerMacHashs(MacAddress, hash);
+            //guardar o file
+            this.documents.put(hash, f);
+
+            //assinala que o ficheiro esta completo
+            this.dmMI.isDocumentFull.put(hash, true);
+
+            //guarda o nome do ficheiro
+            this.dmMI.documentsNames.put(hash, documentName);
+
+            updateDataManagerMetaInfoFile();
+        }
     }
 
     public void newDocument(String MacAddress, String hash, int numberOfChunks, String documentName) {
         checkFolders(MacAddress);
 
-        Document f = new Document(this.dmMI.Root, MacAddress, hash, numberOfChunks, documentName);
+        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
 
-        registerMacHashs(MacAddress, hash);
+            Document f = new Document(this.dmMI.Root, MacAddress, hash, numberOfChunks, documentName);
 
-        //guardar o file
-        this.documents.put(hash, f);
+            registerMacHashs(MacAddress, hash);
 
-        //assinala que o ficheiro esta completo
-        this.dmMI.isDocumentFull.put(hash, false);
+            //guardar o file
+            this.documents.put(hash, f);
 
-        //guarda o nome do ficheiro
-        this.dmMI.documentsNames.put(hash, documentName);
+            //assinala que o ficheiro esta completo
+            this.dmMI.isDocumentFull.put(hash, false);
 
-        updateDataManagerMetaInfoFile();
+            //guarda o nome do ficheiro
+            this.dmMI.documentsNames.put(hash, documentName);
+
+            updateDataManagerMetaInfoFile();
+        }
     }
 
     public void addChunksToDocument (ArrayList<Chunk> chunks, String MacAddress, String hash){
@@ -108,6 +139,8 @@ public class DataManager {
 
     public Boolean assembleDocument(String MacAddress, String Hash, String destinationPath){
         boolean res = false;
+
+        destinationPath = folderPathNormalizer(destinationPath);
 
         ArrayList<String> documentHashs;
         Document d;
@@ -144,29 +177,35 @@ public class DataManager {
         ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, info, maxDatagramSize);
         String hash = cm.getHash();
 
-        registerMacHashs(MacAddress, hash);
+        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
 
-        //guardar mensagens
-        this.messages.put(hash, cm);
+            registerMacHashs(MacAddress, hash);
 
-        //assinala que a mensagem esta completa
-        this.dmMI.isMessageFull.put(cm.getHash(), true);
+            //guardar mensagens
+            this.messages.put(hash, cm);
 
-        updateDataManagerMetaInfoFile();
+            //assinala que a mensagem esta completa
+            this.dmMI.isMessageFull.put(cm.getHash(), true);
+
+            updateDataManagerMetaInfoFile();
+        }
     }
 
-    public void newMessage(String MacAddress, String Hash, int numberOfChunks){
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, Hash, numberOfChunks);
+    public void newMessage(String MacAddress, String hash, int numberOfChunks){
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, hash, numberOfChunks);
 
-        registerMacHashs(MacAddress, Hash);
+        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
 
-        //guardar a mensagem
-        this.messages.put(Hash, cm);
+            registerMacHashs(MacAddress, hash);
 
-        //assinala que a mensagem esta nao completa
-        this.dmMI.isMessageFull.put(Hash, false);
+            //guardar a mensagem
+            this.messages.put(hash, cm);
 
-        updateDataManagerMetaInfoFile();
+            //assinala que a mensagem esta nao completa
+            this.dmMI.isMessageFull.put(hash, false);
+
+            updateDataManagerMetaInfoFile();
+        }
     }
 
     public void addChunksToMessage(String MacAddress, String Hash, ArrayList<Chunk> chunks){
@@ -326,22 +365,17 @@ public class DataManager {
                 }
             }
         }
-
-        printFiles();
     }
 
-    private void printFiles(){
-        ArrayList<String> hashs;
-        for(String mac : this.dmMI.macHashs.keySet()){
-            hashs = this.dmMI.macHashs.get(mac);
+    private String folderPathNormalizer(String path){
 
-            for(String hash: hashs){
-                if(this.documents.containsKey(hash))
-                    System.out.println("DOCUMENT => " + this.documents.get(hash).cm.getHash());
-                else{
-                    System.out.println("MESSAGE => " + this.messages.get(hash).getHash());
-                }
-            }
-        }
+        path = path + '/';
+        int charIndex;
+
+        while((charIndex = path.indexOf("//")) != -1)
+            path = path.substring(0, charIndex) + path.substring(charIndex+1);
+
+
+        return path;
     }
 }

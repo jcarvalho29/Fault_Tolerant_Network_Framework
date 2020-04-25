@@ -38,6 +38,15 @@ public class Document {
         loadDocument(maxDatagramSize);
     }
 
+    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize, int maxChunksLoadedAtaTime){
+        this.Root = Root;
+        this.MacAddress = MacAddress;
+        this.localDocumentPath = localDocumentPath;
+        this.documentName = DocumentName;
+
+        loadDocument(maxDatagramSize, maxChunksLoadedAtaTime);
+    }
+
     public Document(String Root, String MacAddress, String hash, int numberOfChunks, String DocumentName){
         this.Root = Root;
         this.MacAddress = MacAddress;
@@ -82,26 +91,10 @@ public class Document {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
 
-          /*int i = 0;
-            int read = 1;
-            ArrayList<byte[]> info = new ArrayList<byte[]>();
-            byte[] buffer;
-            Data.Chunk[] Chunks;
-
-            while(i < this.mi.numberOfChunks){
-
-                for(int j = 0; j < 10000 && i < this.mi.numberOfChunks && read != 0; i++, j++){
-                    buffer = new byte[this.mi.datagramMaxSize];
-                    read = fis.read(buffer);
-                    info.add(buffer);
-                }
-                Chunks = createChunks(info, i);
-                writeChunksToFolder(Chunks, info.size());
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }*/
+    private void loadDocument(int datagramMaxSize, int maxChunksLoadedAtaTime){
+        this.cm = new ChunkManager(this.Root, this.MacAddress, this.localDocumentPath, datagramMaxSize, maxChunksLoadedAtaTime);
     }
 
     /*
@@ -109,10 +102,9 @@ public class Document {
      *   String folder => Destination Folder within the Node Folder
      */
     public void writeDocumentToFolder(String folder){
-        String folderToWritePath = this.Root + folder + this.documentName ;
-        System.out.println("WRITE TO => " + folderToWritePath);
-        String folderToReadPath = this.Root + this.MacAddress + "/" + this.cm.getHash() + "/Chunks/";
-        System.out.println("READ FROM => " + folderToReadPath);
+
+        String folderToWritePath = folderPathNormalizer(this.Root + folder) + this.documentName ;
+        String folderToReadPath = folderPathNormalizer(this.Root + this.MacAddress + "/" + this.cm.getHash()) + "/Chunks/";
 
         Chunk chunk;
         int i = 0;
@@ -130,11 +122,9 @@ public class Document {
                 i++;
             }
             outputStream.close();
-            System.out.println("FICHEIRO MONTADO COM SUCESSO");
         }
         catch (Exception e){
             e.printStackTrace();
-            System.out.println("ERRO AO JUNTAR OS CHUNKS");
         }
     }
 
@@ -166,4 +156,16 @@ public class Document {
         return this.cm.getFull();
     }
 
+
+    private String folderPathNormalizer(String path) {
+
+        path = path + '/';
+        int charIndex;
+
+        while ((charIndex = path.indexOf("//")) != -1)
+            path = path.substring(0, charIndex) + path.substring(charIndex + 1);
+
+
+        return path;
+    }
 }

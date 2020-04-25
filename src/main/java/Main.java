@@ -1,6 +1,8 @@
 import Data.DataManager;
 
 import java.net.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import static java.lang.System.out;
 import java.io.File;
@@ -55,10 +57,10 @@ public class Main{
         File root = new File(path);
         while(!root.exists() && !root.isDirectory() && !root.mkdir());
 
-        out.println(path);
+        //out.println(path);
         DataManager dm = new DataManager(path, true);
 
-        //dm.newDocument("myMAC", (rootPath+"/teste.pdf"), "teste.pdf", 1000);
+        dm.newDocument("myMAC", (rootPath+"/teste.pdf"), "teste.pdf", 1000);
         dm.assembleDocument("myMAC", "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178", "");
         dm.deleteDocument("myMAC", "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178");
 
@@ -66,7 +68,7 @@ public class Main{
         byte[] info = hi.getBytes();
 
         //dm.newMessage("myMAC", info, 1000);
-        info = dm.getInfoInByteArray("myMAC", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        //info = dm.getInfoInByteArray("myMAC", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
 
         out.println("READ FROM CHUNKS => " + new String(info));
     }

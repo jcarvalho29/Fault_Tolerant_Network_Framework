@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="Fault Tolerant Network Framework:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Fault_Tolerant_Network_Framework_jar</output-path>
+    <root id="archive" name="Fault Tolerant Network Framework.jar">
+      <element id="module-output" name="Fault Tolerant Network Framework" />
+    </root>
+  </artifact>
+</component>
