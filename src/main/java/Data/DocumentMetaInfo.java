@@ -11,6 +11,7 @@ public class DocumentMetaInfo implements Serializable {
     public boolean full;
     public ArrayList<Integer> missingChunks;
     public String Hash;
+    public String HashAlgoritm;
 
     public DocumentMetaInfo(){};
 
@@ -22,5 +23,6 @@ public class DocumentMetaInfo implements Serializable {
         this.full = mi.full;
         this.missingChunks = (ArrayList<Integer>) mi.missingChunks.clone();
         this.Hash = mi.Hash;
+        this.HashAlgoritm = mi.HashAlgoritm;
     };
 }

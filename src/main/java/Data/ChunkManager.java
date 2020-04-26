@@ -20,6 +20,9 @@ public class ChunkManager {
 
     private DocumentMetaInfo mi;
 
+    /*
+    * Creates a basic ChunkManager object that is used to initialize the class from a DocumentMetaInfo file
+    * */
     public ChunkManager(String Root, String MacAddress){
         Root = folderPathNormalizer(Root);
         this.Root = Root;
@@ -27,20 +30,14 @@ public class ChunkManager {
     }
 
     /*
-     * Sets the local Meta Info equal to a received Meta Info
-     * */
-    public void setDocumentMetaInfo(DocumentMetaInfo dmi){
-        this.mi = dmi;
-    }
-    /*
-    * Creates a Ficheiro Object for a File to be received and written to Memory
+    * Creates a ChunkManager Object for a File to be received and written to Memory
     *   int numberOfChunks => Number of Chunks this File is composed of
     *   String mac => MAC address of the Node who's sending the File
     *   String name => Name of the File
     *   String hash => Hash of the File
     */
 
-    public ChunkManager (String root, String mac, String hash, int numberOfChunks){
+    public ChunkManager (String root, String mac, String hash, String hashAlgorithm,  int numberOfChunks){
         root = folderPathNormalizer(root);
         this.Root = root;
         this.MacAddress = mac;
@@ -52,6 +49,7 @@ public class ChunkManager {
         this.mi.chunksSize = 0;
         this.mi.full = false;
         this.mi.Hash = hash;
+        this.mi.HashAlgoritm = hashAlgorithm;
 
         this.mi.missingChunks = new ArrayList<Integer>();
         int maxID = this.mi.numberOfChunks + Integer.MIN_VALUE;
@@ -70,7 +68,7 @@ public class ChunkManager {
      *   int datagramMaxSize => Maximum size a single datagram can take
      */
 
-    public ChunkManager (String root, String mac, byte[] info, int datagramMaxSize) {
+    public ChunkManager (String root, String mac, byte[] info, int datagramMaxSize, String hashAlgorithm) {
         root = folderPathNormalizer(root);
 
         this.Root = root;
@@ -87,7 +85,8 @@ public class ChunkManager {
 
         ArrayList <Chunk> chunks = createChunks(splitInfoIntoArrays(info), this.mi.numberOfChunks);
 
-        this.mi.Hash = sha_256(chunks);
+        this.mi.HashAlgoritm = hashAlgorithm;
+        this.mi.Hash = sha_256_Chunks(chunks, hashAlgorithm);
 
         File hashFolder = new File(this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
@@ -98,7 +97,11 @@ public class ChunkManager {
         writeDocumentMetaInfoToFile();
     }
 
-    public ChunkManager (String root, String mac, String localFilePath, int datagramMaxSize, int maxChunksLoadedAtaTime) {
+    /*
+    * Constructor that creates a ChunkManager object. This Constructor will load a local file to
+    * chunks and only have maxChunksLoadedAtaTime chunks in Ram at a time
+    * */
+    public ChunkManager (String root, String mac, String localFilePath, String hashAlgorithm, int datagramMaxSize, int maxChunksLoadedAtaTime) {
         root = folderPathNormalizer(root);
 
         this.Root = root;
@@ -106,7 +109,7 @@ public class ChunkManager {
 
         this.mi = new DocumentMetaInfo();
         this.mi.Hash = "TMPFILE";
-
+        this.mi.HashAlgoritm = hashAlgorithm;
 
         File tempFolder = new File(this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/");
         while (!tempFolder.exists() && !tempFolder.isDirectory() && !tempFolder.mkdir()) ;
@@ -146,59 +149,6 @@ public class ChunkManager {
         writeDocumentMetaInfoToFile();
     }
 
-    public String loadInfoRamEfficient(String localFilePath, int maxChunksLoadedAtaTime){
-        Hash h = new Hash("SHA-256");
-        try {
-            FileInputStream fis = new FileInputStream(localFilePath);
-
-            int i = 0;
-            int read = 1;
-            long readlimit;
-            ArrayList<byte[]> info = new ArrayList<byte[]>();
-            byte[] buffer;
-            ArrayList<Chunk> Chunks;
-
-            while(i < this.mi.numberOfChunks){
-
-                for(int j = 0; j < maxChunksLoadedAtaTime && i < this.mi.numberOfChunks && read != 0; i++, j++){
-                    if(i == this.mi.numberOfChunks-1)
-                        readlimit = this.mi.chunksSize - this.mi.datagramMaxSize * i;
-                    else
-                        readlimit = this.mi.datagramMaxSize;
-                    buffer = new byte[(int) readlimit];
-                    read = fis.read(buffer);
-                    h.updateHash(buffer);
-                    info.add(buffer);
-                }
-                Chunks = createChunks(info, i);
-                writeChunksToFolder(Chunks, info.size());
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return h.extractHash();
-    }
-
-    private ArrayList <byte[]> splitInfoIntoArrays(byte[] info){
-        ArrayList<byte[]> splits = new ArrayList<byte[]>();
-
-        int i = 0;
-        long readlimit;
-
-        while(i < this.mi.numberOfChunks) {
-            if(i == this.mi.numberOfChunks-1)
-                readlimit = (this.mi.datagramMaxSize * i) + this.mi.chunksSize - this.mi.datagramMaxSize*i;
-            else
-                readlimit = this.mi.datagramMaxSize * (i + 1);
-
-            //System.out.println("READ FROM " + this.mi.datagramMaxSize * i + " TO " + readlimit + "( " + this.mi.chunksSize +  " )");
-            splits.add(Arrays.copyOfRange(info, this.mi.datagramMaxSize * i, (int) readlimit));
-            i++;
-        }
-
-        return splits;
-    }
     /*
     * Writes the Data.DocumentMetaInfo to a file within the root/mac/hash path
     */
@@ -265,6 +215,67 @@ public class ChunkManager {
     }
 
     /*
+    * This will load a File to Chunks to the Memory and will only have maxChunksLoadedAtaTime chunks in Ram at a time
+    * */
+    public String loadInfoRamEfficient(String localFilePath, int maxChunksLoadedAtaTime){
+        Hash h = new Hash(this.mi.HashAlgoritm);
+        try {
+            FileInputStream fis = new FileInputStream(localFilePath);
+
+            int i = 0;
+            int read = 1;
+            long readlimit;
+            ArrayList<byte[]> info = new ArrayList<byte[]>();
+            byte[] buffer;
+            ArrayList<Chunk> Chunks;
+
+            while(i < this.mi.numberOfChunks){
+
+                for(int j = 0; j < maxChunksLoadedAtaTime && i < this.mi.numberOfChunks && read != 0; i++, j++){
+                    if(i == this.mi.numberOfChunks-1)
+                        readlimit = this.mi.chunksSize - this.mi.datagramMaxSize * i;
+                    else
+                        readlimit = this.mi.datagramMaxSize;
+                    buffer = new byte[(int) readlimit];
+                    read = fis.read(buffer);
+                    h.updateHash(buffer);
+                    info.add(buffer);
+                }
+                Chunks = createChunks(info, i);
+                writeChunksToFolder(Chunks, info.size());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return h.extractHash();
+    }
+
+    /*
+    * This will split a byte[] into multiple byte[] based on the mi.datagramMaxSize
+    * Returns a ArrayList with the corresponding byte[]
+    * */
+    private ArrayList <byte[]> splitInfoIntoArrays(byte[] info){
+        ArrayList<byte[]> splits = new ArrayList<byte[]>();
+
+        int i = 0;
+        long readlimit;
+
+        while(i < this.mi.numberOfChunks) {
+            if(i == this.mi.numberOfChunks-1)
+                readlimit = (this.mi.datagramMaxSize * i) + this.mi.chunksSize - this.mi.datagramMaxSize*i;
+            else
+                readlimit = this.mi.datagramMaxSize * (i + 1);
+
+            //System.out.println("READ FROM " + this.mi.datagramMaxSize * i + " TO " + readlimit + "( " + this.mi.chunksSize +  " )");
+            splits.add(Arrays.copyOfRange(info, this.mi.datagramMaxSize * i, (int) readlimit));
+            i++;
+        }
+
+        return splits;
+    }
+
+    /*
     * Writes a given number of FileChunks to a specified Folder within the MAC Folder
     *   FileChunk[] fcs => Array of FileChunks to be written
     *   int size => Size of the FileChunk Array
@@ -297,6 +308,16 @@ public class ChunkManager {
         }
     }
 
+    /*
+     * Sets the local Meta Info equal to a received Meta Info
+     * */
+    public void setDocumentMetaInfo(DocumentMetaInfo dmi){
+        this.mi = dmi;
+    }
+
+    /*
+    * This will read ALL the chunks, aggregate them into a byte[] and return said byte[]
+    * */
     public byte[] getInfoInByteArray(){
         String folderToReadPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
 
@@ -377,15 +398,14 @@ public class ChunkManager {
     *   int len => Number of Filechunks to Retrieve after the start ID
     * */
     public ArrayList<Chunk> getChunks(int start, int len){
-        //System.out.println("QUERO DESDE " + start + " ATÉ " + (start + len) + " ( " + len + " )");
         start += Integer.MIN_VALUE;
         String tmpFolder = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
 
-        File ficheiro = new File (tmpFolder);
+        File document = new File (tmpFolder);
         ArrayList<Chunk> fChunks = null;
 
         try {
-            if(ficheiro.exists() && ficheiro.isDirectory()){
+            if(document.exists() && document.isDirectory()){
                 fChunks = new ArrayList<Chunk>();
 
                 for(int i = 0; i < len; i++, start++){
@@ -402,19 +422,11 @@ public class ChunkManager {
     }
 
     /*
-    * Retrieves the IDs of the Missing Filechunks. These Filechunks are the ones that haven't been sent or haven't been received yet.
-    */
-    public ArrayList<Integer> getMissingChunksIDs(){
-
-        return (ArrayList<Integer>) this.mi.missingChunks.clone();
-    }
-
-    /*
-    * Given an ArrayList with Filechunk IDs, this will retrieve them.
-    *   ArrayList<Integer> mfc => ArrayList that contains IDs of Filechunks
-    *
-    * This function is intended to be used to retrieve FileChunks that have been marked as Missing by a File Receiver.
-    */
+     * Given an ArrayList with Filechunk IDs, this will retrieve them.
+     *   ArrayList<Integer> mfc => ArrayList that contains IDs of Filechunks
+     *
+     * This function is intended to be used to retrieve FileChunks that have been marked as Missing by a File Receiver.
+     */
     public ArrayList<Chunk> getMissingChunks(ArrayList<Integer> mfc){
 
         String tmpFolder = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
@@ -426,7 +438,6 @@ public class ChunkManager {
             if(ficheiro.exists() && ficheiro.isDirectory()){
                 Chunk f;
                 for(Integer i : mfc){
-                    //System.out.println("LI O MISSING FILE CHUNK " + i);
                     f = new Chunk(Files.readAllBytes(Paths.get(tmpFolder + "/" + i + ".chunk")), i);
                     res.add(f);
                 }
@@ -437,6 +448,13 @@ public class ChunkManager {
             e.printStackTrace();
         }
         return res;
+    }
+
+    /*
+    * Retrieves the IDs of the Missing Filechunks. These Filechunks are the ones that haven't been sent or haven't been received yet.
+    */
+    public ArrayList<Integer> getMissingChunksIDs(){
+        return new ArrayList<Integer>(this.mi.missingChunks);
     }
 
     /*
@@ -475,29 +493,43 @@ public class ChunkManager {
     }
 
     /*
-    * Retrieves the first Filechunk of the File
-    */
-    public Chunk getFirstChunk(){
-        return getChunks(0, 1).get(0);
-    }
-
-
-
-    /*
-    * Checks if the provided byte[] hash matchs the provided hash
+    * Calculates the hash of the provided ArrayList<Chunk>
     * */
-    public boolean checkHash(ArrayList<Chunk> chunks, String hash){
-        return hash.equals(sha_256(chunks));
-    }
-
-    private String sha_256(ArrayList<Chunk> chunks){
-        Hash h = new Hash("SHA-256");
+    private String sha_256_Chunks(ArrayList<Chunk> chunks, String alg){
+        Hash h = new Hash(alg);
 
         for(Chunk c : chunks) {
             h.updateHash(c.getChunk());
         }
 
         return h.extractHash();
+    }
+
+    /*
+     * Calculates the hash of the provided ArrayList<byte[]>
+     * */
+    private String sha_256_Bytes(ArrayList<byte[]> bytes, String alg){
+        Hash h = new Hash(alg);
+
+        for(byte[] b : bytes) {
+            h.updateHash(b);
+        }
+
+        return h.extractHash();
+    }
+
+    /*
+     * Checks if the provided ArrayList<Chunk> hash matches the provided hash
+     * */
+    public boolean checkHash_Chunks(ArrayList<Chunk> chunks, String hash, String alg){
+        return hash.equals(sha_256_Chunks(chunks, alg));
+    }
+
+    /*
+     * Checks if the provided ArrayList<byte[]> hash matches the provided hash
+     * */
+    public boolean checkHash_Bytes(ArrayList<byte[]> bytes, String hash, String alg){
+        return hash.equals(sha_256_Bytes(bytes, alg));
     }
 
     /*
@@ -525,6 +557,9 @@ public class ChunkManager {
 
     }
 
+    /*
+     * Normalizes the given path
+     * */
     private String folderPathNormalizer(String path) {
 
         path = path + '/';

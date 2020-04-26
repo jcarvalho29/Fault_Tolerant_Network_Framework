@@ -29,48 +29,31 @@ public class Document {
         this.documentName = documentName;
         this.cm = cm;
     }
-    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize){
+    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize, String hashAlgorithm){
         this.Root = Root;
         this.MacAddress = MacAddress;
         this.localDocumentPath = localDocumentPath;
         this.documentName = DocumentName;
 
-        loadDocument(maxDatagramSize);
+        loadDocument(maxDatagramSize, hashAlgorithm);
     }
 
-    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize, int maxChunksLoadedAtaTime){
+    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
         this.Root = Root;
         this.MacAddress = MacAddress;
         this.localDocumentPath = localDocumentPath;
         this.documentName = DocumentName;
 
-        loadDocument(maxDatagramSize, maxChunksLoadedAtaTime);
+        loadDocument(maxDatagramSize, hashAlgorithm, maxChunksLoadedAtaTime);
     }
 
-    public Document(String Root, String MacAddress, String hash, int numberOfChunks, String DocumentName){
+    public Document(String Root, String MacAddress, String hash, int numberOfChunks, String DocumentName, String hashAlgorithm){
         this.Root = Root;
         this.MacAddress = MacAddress;
         this.documentName = DocumentName;
 
-        this.cm = new ChunkManager(this.Root, MacAddress, hash, numberOfChunks);
+        this.cm = new ChunkManager(this.Root, MacAddress, hash, hashAlgorithm, numberOfChunks);
 
-    }
-
-    /*
-    * Given an ArrayList of chunks, this function uses the Data.ChunkManager object to write them to Root/MacAddress/hash/chunks folder
-    * */
-    public void addChunks(ArrayList<Chunk> chunks){
-        this.cm.addChunks(chunks);
-    }
-
-    /*
-    * Uses the Data.ChunkManager object to delete all the saved chunks in Root/MacAddress/hash/chunks as well as the MetaInfo File and the hash Folder
-    * */
-    public void delete(){
-        this.cm.eraseChunks();
-        File hashDocument = new File(this.Root + "/" + this.MacAddress + "/" + this.cm.getHash());
-
-        while(hashDocument.exists() && !hashDocument.delete());
     }
 
     /*
@@ -79,22 +62,39 @@ public class Document {
      * The reading process only loads a maximum of 10k Byte[] of size datagramMaxSize at a time, creating a maximum of 10k chunks at a time.
      * This reduces the amount of RAM needed
      */
-    private void loadDocument(int maxDatagramSize){
+    private void loadDocument(int maxDatagramSize, String hashAlgorithm){
 
         try {
             File fileToLoad = new java.io.File(this.localDocumentPath);
             FileInputStream fis = new FileInputStream(this.localDocumentPath);
             byte[] info = new byte[Math.toIntExact(fileToLoad.length())];
             fis.read(info);
-            this.cm = new ChunkManager(this.Root, this.MacAddress, info, maxDatagramSize);
+            this.cm = new ChunkManager(this.Root, this.MacAddress, info, maxDatagramSize, hashAlgorithm);
 
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void loadDocument(int datagramMaxSize, int maxChunksLoadedAtaTime){
-        this.cm = new ChunkManager(this.Root, this.MacAddress, this.localDocumentPath, datagramMaxSize, maxChunksLoadedAtaTime);
+    private void loadDocument(int datagramMaxSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
+        this.cm = new ChunkManager(this.Root, this.MacAddress, this.localDocumentPath, hashAlgorithm, datagramMaxSize,  maxChunksLoadedAtaTime);
+    }
+
+    /*
+     * Given an ArrayList of chunks, this function uses the Data.ChunkManager object to write them to Root/MacAddress/hash/chunks folder
+     * */
+    public void addChunks(ArrayList<Chunk> chunks){
+        this.cm.addChunks(chunks);
+    }
+
+    /*
+     * Uses the Data.ChunkManager object to delete all the saved chunks in Root/MacAddress/hash/chunks as well as the MetaInfo File and the hash Folder
+     * */
+    public void delete(){
+        this.cm.eraseChunks();
+        File hashDocument = new File(this.Root + "/" + this.MacAddress + "/" + this.cm.getHash());
+
+        while(hashDocument.exists() && !hashDocument.delete());
     }
 
     /*
@@ -156,7 +156,9 @@ public class Document {
         return this.cm.getFull();
     }
 
-
+    /*
+     * Normalizes the given path
+     * */
     private String folderPathNormalizer(String path) {
 
         path = path + '/';
