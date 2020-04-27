@@ -1,8 +1,7 @@
 import Data.DataManager;
+import Network.Scheduler;
 
 import java.net.*;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import static java.lang.System.out;
 import java.io.File;
@@ -53,12 +52,20 @@ public class Main{
         }*/
 
         String rootPath = System.getProperty("user.home") + "/Desktop";
-        String path = rootPath + "/FTNF/";
-        File root = new File(path);
+        String ftnfpath = rootPath + "/FTNF/";
+        File root = new File(ftnfpath);
         while(!root.exists() && !root.isDirectory() && !root.mkdir());
 
+        String path = ftnfpath + "Data/";
+        root = new File(path);
+        while(!root.exists() && !root.isDirectory() && !root.mkdir());
+
+        path = ftnfpath + "Network/";
+        root = new File(path);
+        while(!root.exists() && !root.isDirectory() && !root.mkdir());
         //out.println(path);
-        DataManager dm = new DataManager(path, true);
+        DataManager dm = new DataManager(ftnfpath, true);
+        Scheduler sc = new Scheduler(ftnfpath, true);
 
         dm.newDocument("myMAC", (rootPath+"/teste.pdf"), "teste.pdf", 1000);
         dm.assembleDocument("myMAC", "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178", "");
@@ -67,9 +74,16 @@ public class Main{
         String hi = "hello world";
         byte[] info = hi.getBytes();
 
-        //dm.newMessage("myMAC", info, 1000);
-        //info = dm.getInfoInByteArray("myMAC", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        dm.newMessage("myMAC", info, 1000);
+        info = dm.getInfoInByteArray("myMAC", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
 
+        sc.schedule("127.0.0.1", 5, 3000, "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178");
+        sc.schedule("127.0.0.1", 3, 3000, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+
+        sc.editPriority("127.0.0.1", 3, 1, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+
+        sc.editIP("127.0.0.1", "127.0.0.2", 1, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        sc.editPort("127.0.0.2", 1, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9", 2000);
         out.println("READ FROM CHUNKS => " + new String(info));
     }
 

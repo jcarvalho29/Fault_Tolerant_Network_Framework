@@ -30,7 +30,7 @@ public class DataManager {
 
 
         if (fetch) {
-            dmmi = fetchDMMI(Root);
+            dmmi = fetchDMMI(Root + "Data/");
         }
 
         if(dmmi == null) {
@@ -433,7 +433,7 @@ public class DataManager {
     * Writes the DataManagerMetaInfo to a Folder
     * */
     public void writeDataManagerMetaInfoToRootFolder(){
-        String dataManagerMetaInfoFilePath = this.dmMI.Root + "DataManagerDocumentMeta.info";
+        String dataManagerMetaInfoFilePath = this.dmMI.Root + "DataManagerMeta.info";
 
         File dmMIInfo = new File(dataManagerMetaInfoFilePath);
 
@@ -454,7 +454,7 @@ public class DataManager {
     * Reads and retrieves an Object from the root folder that corresponds to a DataManagerMetaInfo
     * */
     private Object readDataManagerMetaInfoFromFile(String Root){
-        String dataManagerMetaInfoFilePath = Root + "DataManagerDocumentMeta.info";
+        String dataManagerMetaInfoFilePath = Root + "DataManagerMeta.info";
 
         File FileInfo = new File(Root);
         Object obj = null;
@@ -480,13 +480,13 @@ public class DataManager {
      * Deletes the current DataManagerMetaInfo File in root/ and writes the new DataManagerMetaInfo to the same path
      */
     private void updateDataManagerMetaInfoFile(){
-        String dataManagerMetaInfoFilePath = this.dmMI.Root + "DataManagerDocumentMeta.info";
+        String dataManagerMetaInfoFilePath = this.dmMI.Root + "DataManagerMeta.info";
 
         File FileInfo = new File(this.dmMI.Root);
 
         if(FileInfo.exists()) {
-            File documentMetaInfo = new File(dataManagerMetaInfoFilePath);
-            while(!documentMetaInfo.delete());
+            File dataManagerMetaInfo = new File(dataManagerMetaInfoFilePath);
+            while(!dataManagerMetaInfo.delete());
 
             writeDataManagerMetaInfoToRootFolder();
         }
@@ -496,10 +496,9 @@ public class DataManager {
     * Fetches and retrieves a DataManagerMetaInfo object from the root/ if present
     * */
     private DataManagerMetaInfo fetchDMMI(String Root){
-        DataManagerMetaInfo dmmi = null;
         Object obj = null;
 
-        String dataManagerMetaInfoFilePath = Root + "DataManagerDocumentMeta.info";
+        String dataManagerMetaInfoFilePath = Root + "Data/DataManagerMeta.info";
 
         File dataManagerMetaInfoFile = new File(dataManagerMetaInfoFilePath);
 

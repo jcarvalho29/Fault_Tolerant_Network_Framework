@@ -15,7 +15,7 @@ public class DataManagerMetaInfo implements Serializable {
     public HashMap<String, Boolean> isMessageFull;
 
     public DataManagerMetaInfo(String Root){
-        this.Root = Root;
+        this.Root = Root + "Data/";
 
         this.macHashs = new HashMap<String, ArrayList<String>>();
 
