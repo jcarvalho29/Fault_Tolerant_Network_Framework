@@ -18,7 +18,7 @@ public class ChunkManager {
     private String Root;
     private String MacAddress;
 
-    private DocumentMetaInfo mi;
+    private ChunkManagerMetaInfo mi;
 
     /*
     * Creates a basic ChunkManager object that is used to initialize the class from a DocumentMetaInfo file
@@ -42,7 +42,7 @@ public class ChunkManager {
         this.Root = root;
         this.MacAddress = mac;
 
-        this.mi = new DocumentMetaInfo();
+        this.mi = new ChunkManagerMetaInfo();
 
         this.mi.numberOfChunks = numberOfChunks;
         this.mi.numberOfChunksInArray = 0;
@@ -74,7 +74,7 @@ public class ChunkManager {
         this.Root = root;
         this.MacAddress = mac;
 
-        this.mi = new DocumentMetaInfo();
+        this.mi = new ChunkManagerMetaInfo();
 
 
         this.mi.datagramMaxSize = datagramMaxSize;
@@ -107,7 +107,7 @@ public class ChunkManager {
         this.Root = root;
         this.MacAddress = mac;
 
-        this.mi = new DocumentMetaInfo();
+        this.mi = new ChunkManagerMetaInfo();
         this.mi.Hash = "TMPFILE";
         this.mi.HashAlgoritm = hashAlgorithm;
 
@@ -154,7 +154,7 @@ public class ChunkManager {
     */
     public void writeDocumentMetaInfoToFile(){
         String FileInfoPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/";
-        String documentMetaInfoFilePath = FileInfoPath + "DocumentMeta.info";
+        String documentMetaInfoFilePath = FileInfoPath + "ChunkManagerMeta.info";
 
         File FileInfo = new File(FileInfoPath);
 
@@ -177,7 +177,7 @@ public class ChunkManager {
     */
     public void readDocumentMetaInfoFromFile(String hash){
         String FileInfoPath = this.Root + this.MacAddress + "/" + hash + "/";
-        String documentMetaInfoFilePath = FileInfoPath + "DocumentMeta.info";
+        String documentMetaInfoFilePath = FileInfoPath + "ChunkManagerMeta.info";
 
         File FileInfo = new File(FileInfoPath);
 
@@ -189,7 +189,7 @@ public class ChunkManager {
 
                 Object obj = objectIn.readObject();
 
-                this.mi = (DocumentMetaInfo) obj;
+                this.mi = (ChunkManagerMetaInfo) obj;
 
             } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
@@ -202,7 +202,7 @@ public class ChunkManager {
     */
     public void updateDocumentMetaInfoFile(){
         String FileInfoPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/";
-        String documentMetaInfoFilePath = FileInfoPath + "DocumentMeta.info";
+        String documentMetaInfoFilePath = FileInfoPath + "ChunkManagerMeta.info";
 
         File FileInfo = new File(FileInfoPath);
 
@@ -311,7 +311,7 @@ public class ChunkManager {
     /*
      * Sets the local Meta Info equal to a received Meta Info
      * */
-    public void setDocumentMetaInfo(DocumentMetaInfo dmi){
+    public void setDocumentMetaInfo(ChunkManagerMetaInfo dmi){
         this.mi = dmi;
     }
 
@@ -457,6 +457,152 @@ public class ChunkManager {
         return new ArrayList<Integer>(this.mi.missingChunks);
     }
 
+
+    public CompressedMissingChunksID getCompressedMissingChunksID(){
+
+        //System.out.println(mfcGroup);
+        ArrayList <Integer> mfcGroup = this.mi.missingChunks;
+
+        int referenceID = mfcGroup.get(0);
+        int currentID = referenceID;
+        int counter = 0;
+        ArrayList<Integer> toAdd = new ArrayList<Integer>();
+        int toAddAux = 0;
+        int pointer = 0;
+
+        ArrayList<Byte> inc = new ArrayList<Byte>();
+
+        mfcGroup.remove(0);
+
+        int dif = Byte.MAX_VALUE - Byte.MIN_VALUE;
+
+        for(int id : mfcGroup){
+            while(currentID + dif < id){
+                if(pointer == 8) {
+                    toAdd.add(toAddAux);
+                    //System.out.println("TO ADD => (int)" + toAddAux + " (byte)" + (byte)(toAddAux + Byte.MIN_VALUE));
+                    pointer = 0;
+                    toAddAux = 0;
+                }
+                pointer++;
+                toAddAux *= 2;
+                currentID +=  dif;
+            }
+            if(pointer == 8) {
+                toAdd.add(toAddAux);
+                //System.out.println("TO ADD => (int)" + toAddAux + " (byte)" + (byte)(toAddAux + Byte.MIN_VALUE));
+                pointer = 0;
+                toAddAux = 0;
+            }
+            pointer++;
+            toAddAux *= 2;
+            toAddAux++;
+            //System.out.println("INC TO ADD => " + (byte)(id - currentID + Byte.MIN_VALUE));
+            inc.add((byte)(id - currentID + Byte.MIN_VALUE));
+            currentID = id;
+            counter++;
+        }
+        if(pointer == 8) {
+            toAdd.add(toAddAux);
+            //System.out.println("TO ADD => (int)" + toAddAux + "\n\tpointer => " + pointer);
+        }
+
+        ArrayList<Byte> invertedToAdd = new ArrayList<Byte>();
+        int invertedToAddAux;
+
+        for(int b : toAdd){
+            //System.out.println("ANTES => " + b);
+            invertedToAddAux = 0;
+
+            for (int i = 0; i < 8; i++) {
+                invertedToAddAux *= 2;
+                if (b % 2 == 1)
+                    invertedToAddAux++;
+                b /=2;
+            }
+
+            //System.out.println("DEPOIS => " + invertedToAddAux);
+            //aux = invertedToAddAux;
+            //auxb = (byte)(invertedToAddAux - Byte.MIN_VALUE);
+            invertedToAdd.add((byte)(invertedToAddAux - Byte.MIN_VALUE));
+        }
+
+        if(pointer < 8){
+            //System.out.println("TO ADD => (int)" + toAddAux + "\n\tpointer => " + pointer);
+            invertedToAddAux = 0;
+
+            for (int i = 0; i < pointer; i++) {
+                invertedToAddAux *= 2;
+                if (toAddAux % 2 == 1)
+                    invertedToAddAux++;
+                toAddAux /=2;
+
+            }
+            //aux = invertedToAddAux;
+            //auxb = (byte)(invertedToAddAux - Byte.MIN_VALUE);
+            invertedToAdd.add((byte)(invertedToAddAux - Byte.MIN_VALUE));
+        }
+
+        //System.out.println("INVERTED => " + aux + "\nIN BYTE => " + auxb);
+        //System.out.println("\tINC SIZE => " + inc.size() + "\n\tTO ADD SIZE => " + toAdd.size() + "\n\tINVERTED TO ADO SIZ => " + invertedToAdd.size() + "\n\tPOINTER => " + pointer);
+        byte[] toAddArray = new byte[invertedToAdd.size()];
+        for(int i = 0; i < invertedToAdd.size(); i++)
+            toAddArray [i] = invertedToAdd.get(i);
+
+        byte[] incArray = new byte[inc.size()];
+        for(int i = 0; i < inc.size(); i++) {
+            //System.out.println("inc[" + i + "] = " + inc.get(i));
+            incArray[i] = inc.get(i);
+        }
+
+        CompressedMissingChunksID structPointer = new CompressedMissingChunksID(referenceID, toAddArray, incArray);
+
+        //System.out.println("TENHO " + counter +1 + " IDS");
+        return structPointer;
+    }
+
+    public ArrayList<Integer> getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
+        ArrayList<Integer> res = new ArrayList<Integer>();
+
+        int currentID = cmcid.referenceID;
+        byte[] toAdd = cmcid.toAdd;
+        byte[] inc = cmcid.increments;
+
+        int maxValue = Byte.MAX_VALUE - Byte.MIN_VALUE;
+
+        res.add(currentID);
+        int i = 0;
+        int toAddAux = 0;
+        int pointer;
+
+        for (byte ta : toAdd){
+            toAddAux = (int)ta - Byte.MIN_VALUE;
+            //System.out.println("THIS HERE => " + toAddAux);
+
+            for(pointer = 0; pointer < 8 && i < inc.length; pointer ++) {
+                if (toAddAux % 2 == 0) {
+                    //System.out.println("TO ADD ERA PAR");
+                    currentID += maxValue;
+                }
+                else {
+                    //System.out.println("TO ADD ERA IMPAR |" + "inc[" + i + "] = " + inc[i]);
+                    currentID += ((int) inc[i++]) - Byte.MIN_VALUE;
+                    res.add(currentID);
+                }
+                toAddAux /=2;
+            }
+/*            if(pointer == 8)
+                System.out.println("POINTER");
+            else
+                System.out.println("INC SIZE | POINTER => " + pointer);*/
+
+        }
+
+
+        //System.out.println(res);
+        return res;
+    }
+
     /*
     * Retrieves The Flag full that indicates if all the FileChunks are present
     */
@@ -547,7 +693,7 @@ public class ChunkManager {
         }
 
 
-        String documentMetainfoFile = path + "DocumentMeta.info";
+        String documentMetainfoFile = path + "ChunkManagerMeta.info";
         c = new File(documentMetainfoFile);
         while(c.exists() && !c.delete());
 

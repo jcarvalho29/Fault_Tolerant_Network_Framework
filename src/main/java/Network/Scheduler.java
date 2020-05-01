@@ -24,8 +24,6 @@ public class Scheduler {
         else {
             this.smi = smi;
         }
-        System.out.println(this.smi.infoByIP_Priority.toString());
-
     }
 
     /*
@@ -54,7 +52,6 @@ public class Scheduler {
 
             priority_Hashs.put(priority, transmissions);
             this.smi.infoByIP_Priority.put(ip, priority_Hashs);
-
             makeIPFolder(ip);
             makePriorityFolder(ip, priority);
         }
@@ -66,12 +63,14 @@ public class Scheduler {
 
         for(int i = 0; !b && i < tam; i++){
             a = t_pointer.get(i);
-            if(t.infoHash.equals(a.infoHash))
+            if(t.infoHash.equals(a.infoHash)) {
                 b = true;
+            }
         }
 
         if(!b) {
             transmissions.add(t);
+            this.smi.Hashs.add(infoHash);
 
             this.smi.infoByIP_Priority.get(ip).put(priority, transmissions);
 
@@ -224,8 +223,17 @@ public class Scheduler {
         else
             this.smi.infoByIP_Priority.get(ip).put(priority, transmissions);
 
+        this.smi.Hashs.remove(transmission.infoHash);
+
     }
 
+    public ArrayList<String> getDestinationServers(){
+        return new ArrayList<String>(this.smi.infoByIP_Priority.keySet());
+    }
+
+    public boolean isScheduled(String hash){
+        return this.smi.Hashs.contains(hash);
+    }
     private void removeTransmissionFromArrayList(ArrayList<Transmission> transmissions, Transmission t){
         transmissions.removeIf(a -> a.infoHash.equals(t.infoHash) && a.port == t.port);
     }

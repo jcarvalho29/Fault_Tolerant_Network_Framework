@@ -1,6 +1,8 @@
 package Data;
 
-public class Chunk {
+import java.io.Serializable;
+
+public class Chunk implements Serializable {
 
 
     private byte[] Chunk;

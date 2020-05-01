@@ -1,5 +1,6 @@
 import Data.DataManager;
 import Network.Scheduler;
+import com.esotericsoftware.kryo.Kryo;
 
 import java.net.*;
 import java.util.*;
@@ -11,25 +12,29 @@ public class Main{
 
 
     public static void main(String args[]) throws SocketException {
-        /*Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
-
+        Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
+        String MacAddress = "EMPTY";
         ArrayList<InetAddress> LocalLinks = new ArrayList<InetAddress>();
         MulticastSocket ms;
         DatagramSocket ds;
-
+        byte[] mac;
         for (NetworkInterface netint : Collections.list(nets)) {
             //displayInterfaceInformation(netint);
 
             Enumeration<InetAddress> inetAddresses = netint.getInetAddresses();
-            out.printf("Hardware address: %s\n", Arrays.toString(netint.getHardwareAddress()));
             for (InetAddress inetAddress : Collections.list(inetAddresses)) {
                 if(inetAddress.isLinkLocalAddress()){
                     LocalLinks.add(inetAddress);
-                    out.printf("InetAddress: %s\n", inetAddress);
+                    StringBuilder sb = new StringBuilder();
+                    mac = netint.getHardwareAddress();
+                    for (int i = 0; i < mac.length; i++) {
+                        sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? "-" : ""));
+                    }
+                    MacAddress = sb.toString();
                 }
             }
         }
-
+/*
         Teste t = new Teste();
         Thread th = new Thread(t);
         th.start();
@@ -51,10 +56,15 @@ public class Main{
             e.printStackTrace();e.printStackTrace();
         }*/
 
-        String rootPath = System.getProperty("user.home") + "/Desktop";
-        String ftnfpath = rootPath + "/FTNF/";
-        File root = new File(ftnfpath);
+
+        String rootPath = System.getProperty("user.home") + "/Desktop/" + MacAddress + "/";
+        out.println(rootPath);
+        File root = new File(rootPath);
         while(!root.exists() && !root.isDirectory() && !root.mkdir());
+        String ftnfpath = rootPath + "/FTNF/";
+        root = new File(ftnfpath);
+        while(!root.exists() && !root.isDirectory() && !root.mkdir());
+
 
         String path = ftnfpath + "Data/";
         root = new File(path);
@@ -67,24 +77,29 @@ public class Main{
         DataManager dm = new DataManager(ftnfpath, true);
         Scheduler sc = new Scheduler(ftnfpath, true);
 
-        dm.newDocument("myMAC", (rootPath+"/teste.pdf"), "teste.pdf", 1000);
-        dm.assembleDocument("myMAC", "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178", "");
-        dm.deleteDocument("myMAC", "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178");
+        String docHash = dm.newDocument("myMAC", (System.getProperty("user.home") + "/Desktop/"+"teste.pdf"), 1000);
+        dm.assembleDocument("myMAC", docHash, "");
 
         String hi = "hello world";
         byte[] info = hi.getBytes();
 
-        dm.newMessage("myMAC", info, 1000);
-        info = dm.getInfoInByteArray("myMAC", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        String msgHash = dm.newMessage("myMAC", info, 1000);
+        info = dm.getInfoInByteArray("myMAC", msgHash);
 
-        sc.schedule("127.0.0.1", 5, 3000, "e3f7436cfd373af2223a7ffadaafbdc259b1af1720bdac6a50ccbe4339efe178");
-        sc.schedule("127.0.0.1", 3, 3000, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        out.println(new String(info));
+        if(dm.isReadyToBeSent(docHash)) {
+            sc.schedule("127.0.0.1", 5, 3000, docHash);
+        }
+        if(!sc.isScheduled(docHash))
+            dm.deleteDocument("myMAC", docHash);
 
-        sc.editPriority("127.0.0.1", 3, 1, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        if(dm.isReadyToBeSent(msgHash))
+            sc.schedule("127.0.0.1", 3, 3000, msgHash);
 
-        sc.editIP("127.0.0.1", "127.0.0.2", 1, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
-        sc.editPort("127.0.0.2", 1, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9", 2000);
-        out.println("READ FROM CHUNKS => " + new String(info));
+        sc.editPriority("127.0.0.1", 3, 1, msgHash);
+
+        sc.editIP("127.0.0.1", "127.0.0.2", 1, msgHash);
+        sc.editPort("127.0.0.2", 1, msgHash, 2000);
     }
 
     static void displayInterfaceInformation(NetworkInterface netint) throws SocketException {

@@ -3,7 +3,7 @@ package Data;
 import java.io.Serializable;
 import java.util.ArrayList;
 
-public class DocumentMetaInfo implements Serializable {
+public class ChunkManagerMetaInfo implements Serializable {
     public int datagramMaxSize;
     public int numberOfChunks;
     public int numberOfChunksInArray;
@@ -13,9 +13,9 @@ public class DocumentMetaInfo implements Serializable {
     public String Hash;
     public String HashAlgoritm;
 
-    public DocumentMetaInfo(){};
+    public ChunkManagerMetaInfo(){};
 
-    public DocumentMetaInfo(DocumentMetaInfo mi){
+    public ChunkManagerMetaInfo(ChunkManagerMetaInfo mi){
         this.datagramMaxSize = mi.datagramMaxSize;
         this.numberOfChunks = mi.numberOfChunks;
         this.numberOfChunksInArray = mi.numberOfChunksInArray;
