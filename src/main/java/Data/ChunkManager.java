@@ -458,13 +458,31 @@ public class ChunkManager {
     }
 
 
-    public CompressedMissingChunksID getCompressedMissingChunksID(){
+    public ArrayList<CompressedMissingChunksID> getCompressedMissingChunksID(int maxSize){
+        ArrayList<Integer> missingChunks = new ArrayList<Integer>(this.mi.missingChunks);
+        ArrayList<CompressedMissingChunksID> res = new ArrayList<CompressedMissingChunksID>();
+
+        if(this.mi.missingChunks.size() == this.mi.numberOfChunks)
+            res = null;
+        else{
+            while(missingChunks.size() > 0){
+                System.out.println("A Processar Compressed MissingChunks" + missingChunks.size() + " left");
+
+                res.add(getCompressedMissingChunksID(missingChunks, maxSize));
+            }
+        }
+
+        return res;
+    }
+    private CompressedMissingChunksID getCompressedMissingChunksID(ArrayList<Integer> missingChunks, int maxSize){
 
         //System.out.println(mfcGroup);
-        ArrayList <Integer> mfcGroup = this.mi.missingChunks;
+
+        ArrayList<Integer> mfcGroup = missingChunks;
 
         int referenceID = mfcGroup.get(0);
         int currentID = referenceID;
+        int currentSize = Integer.SIZE;
         int counter = 0;
         ArrayList<Integer> toAdd = new ArrayList<Integer>();
         int toAddAux = 0;
@@ -476,20 +494,23 @@ public class ChunkManager {
 
         int dif = Byte.MAX_VALUE - Byte.MIN_VALUE;
 
-        for(int id : mfcGroup){
-            while(currentID + dif < id){
-                if(pointer == 8) {
+        for (int i = 0; currentSize < maxSize && i < mfcGroup.size(); i++) {
+            int id = mfcGroup.get(i);
+            while (currentID + dif < id) {
+                if (pointer == 8) {
                     toAdd.add(toAddAux);
+                    currentSize += Byte.SIZE;
                     //System.out.println("TO ADD => (int)" + toAddAux + " (byte)" + (byte)(toAddAux + Byte.MIN_VALUE));
                     pointer = 0;
                     toAddAux = 0;
                 }
                 pointer++;
                 toAddAux *= 2;
-                currentID +=  dif;
+                currentID += dif;
             }
-            if(pointer == 8) {
+            if (pointer == 8) {
                 toAdd.add(toAddAux);
+                currentSize += Byte.SIZE;
                 //System.out.println("TO ADD => (int)" + toAddAux + " (byte)" + (byte)(toAddAux + Byte.MIN_VALUE));
                 pointer = 0;
                 toAddAux = 0;
@@ -498,66 +519,70 @@ public class ChunkManager {
             toAddAux *= 2;
             toAddAux++;
             //System.out.println("INC TO ADD => " + (byte)(id - currentID + Byte.MIN_VALUE));
-            inc.add((byte)(id - currentID + Byte.MIN_VALUE));
+            inc.add((byte) (id - currentID + Byte.MIN_VALUE));
+            currentSize += Byte.SIZE;
             currentID = id;
             counter++;
+
         }
-        if(pointer == 8) {
+        if (pointer == 8) {
             toAdd.add(toAddAux);
+            currentSize += Byte.SIZE;
             //System.out.println("TO ADD => (int)" + toAddAux + "\n\tpointer => " + pointer);
         }
 
         ArrayList<Byte> invertedToAdd = new ArrayList<Byte>();
         int invertedToAddAux;
 
-        for(int b : toAdd){
+        for (int b : toAdd) {
             //System.out.println("ANTES => " + b);
             invertedToAddAux = 0;
 
             for (int i = 0; i < 8; i++) {
                 invertedToAddAux *= 2;
-                if (b % 2 == 1)
+                if (b % 2 == 1) {
                     invertedToAddAux++;
-                b /=2;
+                }
+                b /= 2;
             }
 
             //System.out.println("DEPOIS => " + invertedToAddAux);
             //aux = invertedToAddAux;
             //auxb = (byte)(invertedToAddAux - Byte.MIN_VALUE);
-            invertedToAdd.add((byte)(invertedToAddAux - Byte.MIN_VALUE));
+            invertedToAdd.add((byte) (invertedToAddAux - Byte.MIN_VALUE));
         }
 
-        if(pointer < 8){
+        if (pointer < 8) {
             //System.out.println("TO ADD => (int)" + toAddAux + "\n\tpointer => " + pointer);
             invertedToAddAux = 0;
 
             for (int i = 0; i < pointer; i++) {
                 invertedToAddAux *= 2;
-                if (toAddAux % 2 == 1)
+                if (toAddAux % 2 == 1) {
                     invertedToAddAux++;
-                toAddAux /=2;
+                }
+                toAddAux /= 2;
 
             }
             //aux = invertedToAddAux;
             //auxb = (byte)(invertedToAddAux - Byte.MIN_VALUE);
-            invertedToAdd.add((byte)(invertedToAddAux - Byte.MIN_VALUE));
+            invertedToAdd.add((byte) (invertedToAddAux - Byte.MIN_VALUE));
         }
 
         //System.out.println("INVERTED => " + aux + "\nIN BYTE => " + auxb);
         //System.out.println("\tINC SIZE => " + inc.size() + "\n\tTO ADD SIZE => " + toAdd.size() + "\n\tINVERTED TO ADO SIZ => " + invertedToAdd.size() + "\n\tPOINTER => " + pointer);
         byte[] toAddArray = new byte[invertedToAdd.size()];
-        for(int i = 0; i < invertedToAdd.size(); i++)
-            toAddArray [i] = invertedToAdd.get(i);
+        for (int i = 0; i < invertedToAdd.size(); i++)
+            toAddArray[i] = invertedToAdd.get(i);
 
         byte[] incArray = new byte[inc.size()];
-        for(int i = 0; i < inc.size(); i++) {
+        for (int i = 0; i < inc.size(); i++) {
             //System.out.println("inc[" + i + "] = " + inc.get(i));
             incArray[i] = inc.get(i);
         }
 
-        CompressedMissingChunksID structPointer = new CompressedMissingChunksID(referenceID, toAddArray, incArray);
-
         //System.out.println("TENHO " + counter +1 + " IDS");
+        CompressedMissingChunksID structPointer = new CompressedMissingChunksID(referenceID, toAddArray, incArray);;
         return structPointer;
     }
 

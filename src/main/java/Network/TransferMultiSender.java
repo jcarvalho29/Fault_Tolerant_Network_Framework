@@ -18,7 +18,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class InfoMultiSender implements Runnable{
+public class TransferMultiSender implements Runnable{
 
     private boolean run = true;
 
@@ -35,7 +35,6 @@ public class InfoMultiSender implements Runnable{
     private ChunkManager cm;
     private ChunkManagerMetaInfo cmmi;
     private String DocumentName;
-    private boolean save;
     private boolean confirmation;
 
     private ScheduledExecutorService ses;
@@ -45,7 +44,7 @@ public class InfoMultiSender implements Runnable{
     private ArrayList<FastUnicastSender> fastSenders;
     private ArrayList<Thread> fastSendersThreads;
 
-    public InfoMultiSender(String MacAdress, InetAddress IP, int destUnicastPort, int unicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, boolean save, boolean confirmation){
+    public TransferMultiSender(String MacAdress, InetAddress IP, int destUnicastPort, int unicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, boolean confirmation){
         Random rand = new Random();
 
         this.MacAddress = MacAdress;
@@ -61,7 +60,6 @@ public class InfoMultiSender implements Runnable{
         this.cm = cm;
         this.cmmi = cmmi;
         this.DocumentName = null;
-        this.save = save;
         this.confirmation = confirmation;
 
         this.ses = Executors.newSingleThreadScheduledExecutor();
@@ -84,9 +82,9 @@ public class InfoMultiSender implements Runnable{
             TransferMetaInfo tmi;
 
             if (this.DocumentName == null)
-                tmi = new TransferMetaInfo(this.MacAddress, this.ID, this.cmmi, this.save, this.confirmation);
+                tmi = new TransferMetaInfo(this.MacAddress, this.ID, this.cmmi, this.confirmation);
             else
-                tmi = new TransferMetaInfo(this.MacAddress, this.ID, this.cmmi, this.DocumentName, this.save, this.confirmation);
+                tmi = new TransferMetaInfo(this.MacAddress, this.ID, this.cmmi, this.DocumentName, this.confirmation);
 
             byte[] info = getBytesFromObject((Object) tmi);
 

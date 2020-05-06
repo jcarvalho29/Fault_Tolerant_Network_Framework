@@ -227,7 +227,7 @@ public class DataManager {
     * Adds the provided chunks to the Document that the provided MacAddress/Hash identify. This is intended to be used with the
     * Documents that are being received and not all chunks are present in Memory.
     * */
-    public void addChunksToDocument (ArrayList<Chunk> chunks, String MacAddress, String hash){
+    private void addChunksToDocument (String MacAddress, String hash, ArrayList<Chunk> chunks){
         Document f;
 
         if ((this.dmMI.macHashs.get(MacAddress).contains(hash)) && (!this.dmMI.isDocumentFull.get(hash))){
@@ -383,7 +383,7 @@ public class DataManager {
      * Adds the provided chunks to the ChunkManager that the provided MacAddress/Hash identify. This is intended to be used with the
      * ChunkManager that are being received and not all chunks are present in Memory.
      * */
-    public void addChunksToMessage(String MacAddress, String Hash, ArrayList<Chunk> chunks){
+    private void addChunksToMessage(String MacAddress, String Hash, ArrayList<Chunk> chunks){
         ChunkManager cm;
 
         if ((this.dmMI.macHashs.get(MacAddress).contains(Hash)) && (!this.dmMI.isMessageFull.get(Hash))){
@@ -393,6 +393,18 @@ public class DataManager {
                 this.dmMI.isMessageFull.put(Hash, true);
             this.messages.put(Hash, cm); //???????? PReciso????
         }
+    }
+
+
+    /*
+    * Tries to add the specified chunks to a ChunkManager defined by the provided Hash
+    * */
+    public void addChunks(String MacAddress, String Hash, ArrayList<Chunk> chunks){
+        if(this.documents.containsKey(Hash))
+            addChunksToDocument(Hash, MacAddress, chunks);
+        else
+            if(this.messages.containsKey(Hash))
+                addChunksToMessage(MacAddress, Hash, chunks);
     }
 
     /*
@@ -599,5 +611,51 @@ public class DataManager {
 
 
         return path;
+    }
+
+    /*
+    * Checks the existence of a ChunkManager
+    * */
+    public boolean hasChunkManager(String Hash){
+        boolean res = false;
+
+        if(this.documents.containsKey(Hash) || this.messages.containsKey(Hash))
+            res = true;
+
+        return res;
+    }
+
+    public ArrayList<CompressedMissingChunksID> getCompressedMissingChunkIDs(String Hash, int maxSize){
+
+        ChunkManager cm = null;
+
+        if(this.documents.containsKey(Hash))
+            cm = this.documents.get(Hash).cm;
+        else {
+            if (this.messages.containsKey(Hash))
+                cm = this.messages.get(Hash);
+        }
+
+        ArrayList<CompressedMissingChunksID> res = null;
+        if(cm != null){
+            res = cm.getCompressedMissingChunksID(maxSize);
+        }
+
+        return res;
+    }
+
+    public boolean isChunkManagerFull(String Hash) {
+        boolean res = false;
+
+        if(this.documents.containsKey(Hash)) {
+            res = this.dmMI.isDocumentFull.get(Hash);
+        }
+        else {
+            if (this.messages.containsKey(Hash))
+                res = this.dmMI.isMessageFull.get(Hash);
+        }
+
+        return res;
+
     }
 }
