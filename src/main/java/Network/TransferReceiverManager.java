@@ -3,10 +3,7 @@ package Network;
 import Data.Chunk;
 import Data.CompressedMissingChunksID;
 import Data.DataManager;
-import Messages.ChunkHeader;
-import Messages.MissingChunksID;
-import Messages.TransferMetaInfo;
-import Messages.TransferMultiReceiverInfo;
+import Messages.*;
 
 import java.io.*;
 import java.net.DatagramPacket;
@@ -82,7 +79,6 @@ public class TransferReceiverManager {
     }
 
     private void createFastListeners(){
-
         FastUnicastListener fus;
 
         for(int i = 0; i < numberOfListeners; i++){
@@ -90,9 +86,11 @@ public class TransferReceiverManager {
             fus = new FastUnicastListener(this.MTU);
             Thread t = new Thread(fus);
 
+            t.start();
             this.fastListeners.add(fus);
             this.fastListeners_Threads.add(t);
             this.fastListenersPorts.add(fus.port);
+            System.out.println("PORT " + fus.port);
         }
     }
 
@@ -102,6 +100,7 @@ public class TransferReceiverManager {
                 byte[] data = getBytesFromObject(this.tmri);
                 DatagramPacket dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
                 this.unicastSocket.send(dp);
+                System.out.println("SENT TMRI");
                 Thread.sleep(300);
 
                 for(MissingChunksID mcid : this.missingChunksIDS){
@@ -119,7 +118,9 @@ public class TransferReceiverManager {
     };
 
     private void createInitialDatagramPackets(){
+
         ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.7));
+
         this. missingChunksIDS = new ArrayList<MissingChunksID>();
         MissingChunksID mcID;
 
@@ -136,19 +137,28 @@ public class TransferReceiverManager {
         }
 
         for (int i = 1; cmcIDs != null && i < cmcIDs.size(); i++){
-            mcID = new MissingChunksID(this.tmi.ID, cmcIDs.get(i));
+            ////////!!!!!!!!!!!!! MUDIFICAR O DPS PARA EFIETO DE FEEDBACK NO CONTROLO DE FLUXO
+            mcID = new MissingChunksID(this.tmi.ID, cmcIDs.get(i), (byte) ((100) + Byte.MIN_VALUE));
             this.missingChunksIDS.add(mcID);
         }
     }
 
 
-    private void sendMissingChunkIDs(int consecutiveTimeouts) {
+    private void sendMissingChunkIDs() {
         ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.85));
         ArrayList <MissingChunksID> mcIDs = new ArrayList<MissingChunksID>();
         MissingChunksID mcID;
 
-        for (int i = 1; cmcIDs != null && i < cmcIDs.size(); i++){
-            mcID = new MissingChunksID(this.tmi.ID, cmcIDs.get(i));
+        byte [] teste;
+
+        for(CompressedMissingChunksID cmcid : cmcIDs){
+            teste = getBytesFromObject(cmcid);
+            System.out.println("MAX => " + this.MTU*0.85 + " ACTUAL SIZE => " + teste.length);
+        }
+
+        ////////!!!!!!!!!!!!! MUDIFICAR O DPS PARA EFIETO DE FEEDBACK NO CONTROLO DE FLUXO
+        for (int i = 0; cmcIDs != null && i < cmcIDs.size(); i++){
+            mcID = new MissingChunksID(this.tmi.ID, cmcIDs.get(i), (byte) ((100) + Byte.MIN_VALUE));
             mcIDs.add(mcID);
         }
 
@@ -172,52 +182,93 @@ public class TransferReceiverManager {
 
         if(hasReceivedChunks)
             this.consecutiveTimeouts = 0;
-        else
+        else {
             this.consecutiveTimeouts++;
+            System.out.println("TIMEOUT " + this.consecutiveTimeouts);
+        }
+        if(this.tmi.Confirmation){
+            if (this.consecutiveTimeouts > 0 && this.consecutiveTimeouts < 20) {
+                if(this.consecutiveTimeouts%5 == 0) {
+                    sendMissingChunkIDs();
+                    System.out.println("SENT MISSING CHUNKS DUE TO TIMEOUT!! %5");
+                }
+            }
+            else {
+                if (this.consecutiveTimeouts == 20){
+                    this.kill();
+                    System.out.println("KILLED! WAY TO MANY TIMEOUTS");
+                }
 
-        if(this.consecutiveTimeouts > 0 && this.consecutiveTimeouts < 4)
-            sendMissingChunkIDs(this.consecutiveTimeouts);
+            }
+        }
         else{
-            if(this.consecutiveTimeouts == 4)
-                this.kill();
+            this.kill();
+            System.out.println("KILLED! DOESN'T NEED CONFIRMATION");
         }
     }
 
     private final Runnable retrieveChunksFromFastListeners = () -> {
         ArrayList<Chunk> chunksReceived = new ArrayList<Chunk>();
-        ArrayList<ChunkHeader> chunkHeaders;
+        ArrayList<ChunkMessage> chunkHeaders;
 
         for(FastUnicastListener fus : this.fastListeners){
             chunkHeaders = fus.getChunkHeaders();
             if(chunkHeaders.size() > 0){
                 this.TransferMultiReceiverInfoReceived = true;
             }
-            for(ChunkHeader ch : chunkHeaders){
+            for(ChunkMessage ch : chunkHeaders){
                 if(ch.ID == this.tmi.ID)
                     chunksReceived.add(ch.chunk);
             }
         }
 
         if(chunksReceived.size()>0) {
+            updateTimeoutStatus(true);
             this.dm.addChunks(this.tmi.MacAddress, this.tmi.cmmi.Hash, chunksReceived);
-
             if (this.dm.isChunkManagerFull(this.tmi.cmmi.Hash)) {
                 this.FastReceiversSES.shutdownNow();
                 System.out.println("TRANSFER DONE");
+                sendOver();
             }
         }
         else{
-            // tratar do timeout
+            updateTimeoutStatus(false);
         }
     };
+
+    private void sendOver() {
+        Over over= new Over(this.tmi.ID, true);
+
+        byte[] data = getBytesFromObject(over);
+
+        DatagramPacket dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+
+        int tries = 0;
+        boolean sent = false;
+        while(!sent && tries < 3) {
+            try {
+                tries++;
+                this.unicastSocket.send(dp);
+                sent = true;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            System.out.println("OVER SENT");
+        }
+    }
 
 
     public void startReceiverManager() {
         createFastListeners();
+        System.out.println("Created FAST LISTENERS");
         createInitialDatagramPackets();
+        System.out.println("Created DATAGRAMS");
 
         this.TransferMultiReceiverInfoSES.scheduleWithFixedDelay(sendTransferMultiReceiverInfo, 0, 10, TimeUnit.SECONDS);
+        System.out.println("STARTED STMRI");
+
         this.FastReceiversSES.scheduleWithFixedDelay(retrieveChunksFromFastListeners, 0, 1, TimeUnit.SECONDS);
+        System.out.println("STARTED RCFFL");
 
 
     }

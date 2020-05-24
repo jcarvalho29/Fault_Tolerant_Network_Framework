@@ -1,7 +1,7 @@
 package Network;
 
 import Data.Chunk;
-import Messages.ChunkHeader;
+import Messages.ChunkMessage;
 
 import java.io.*;
 import java.net.DatagramPacket;
@@ -22,13 +22,13 @@ public class FastUnicastListener implements Runnable {
 
     private ReentrantLock lock;
 
-    private boolean run = true;
+    private boolean run;
 
     public FastUnicastListener(int MTU){
         this.port = -1;
         this.MTU = MTU;
         boolean b = true;
-
+        this.run = true;
         this.lock = new ReentrantLock();
         this.fc = new ArrayList<Chunk>();
         this.bytes = new ArrayList<byte[]>();
@@ -48,6 +48,7 @@ public class FastUnicastListener implements Runnable {
     }
 
     public void kill(){
+        System.out.println("FAST LISTENER KILLED");
         this.run = false;
         this.ds.close();
     }
@@ -65,6 +66,7 @@ public class FastUnicastListener implements Runnable {
                 this.lock.lock();
                 this.bytes.add(dp.getData());
                 this.lock.unlock();
+
             }
         }
         catch (SocketException se){
@@ -75,22 +77,24 @@ public class FastUnicastListener implements Runnable {
         }
     }
 
-    public ArrayList<ChunkHeader> getChunkHeaders() {
+    public ArrayList<ChunkMessage> getChunkHeaders() {
         this.lock.lock();
+
         ArrayList<byte[]> b = new ArrayList<byte[]>(this.bytes);
         this.bytes.clear();
         this.lock.unlock();
 
-        ArrayList<ChunkHeader> cPointer = new ArrayList<ChunkHeader>();
+        ArrayList<ChunkMessage> cPointer = new ArrayList<ChunkMessage>();
 
         Object o;
         for(byte[] dpBytes : b){
             o = getObjectFromBytes(dpBytes);
-            if(o instanceof ChunkHeader){
-                cPointer.add((ChunkHeader) o);
+            if(o instanceof ChunkMessage){
+                cPointer.add((ChunkMessage) o);
             }
         }
 
+        //System.out.println("GOT " + cPointer.size() + " CHUNKS");
         return cPointer;
     }
 

@@ -1,10 +1,6 @@
 package Network;
 
 import Data.Chunk;
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -13,7 +9,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class ListnerMulticast {
+public class ListenerMulticast {/*
 
     private boolean run = true;
 
@@ -30,7 +26,7 @@ public class ListnerMulticast {
 
     private ScheduledExecutorService ses;
 
-    public ListnerMulticast(InetAddress ip, InetAddress myIP, int mcport, int ttl){
+    public ListenerMulticast(InetAddress ip, InetAddress myIP, int mcport, int ttl){
 
         this.groupIP = ip;
         this.myIP = myIP;
@@ -137,7 +133,7 @@ public class ListnerMulticast {
 
     /*
      * Reads and retrieves an Object from the root folder that corresponds to a DataManagerMetaInfo
-     * */
+     *
     private Chunk readDatagram(DatagramPacket d) {
 
         ByteArrayInputStream bis = new ByteArrayInputStream(d.getData());
@@ -194,4 +190,5 @@ public class ListnerMulticast {
             e.printStackTrace();
         }
     }
+    */
 }

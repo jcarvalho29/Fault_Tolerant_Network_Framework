@@ -4,11 +4,11 @@ import Data.Chunk;
 
 import java.io.Serializable;
 
-public class ChunkHeader implements Serializable {
+public class ChunkMessage implements Serializable {
     public int ID;
     public Chunk chunk;
 
-    public ChunkHeader(int ID, Chunk chunk){
+    public ChunkMessage(int ID, Chunk chunk){
         this.ID = ID;
         this.chunk = chunk;
     }

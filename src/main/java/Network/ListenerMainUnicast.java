@@ -7,9 +7,10 @@ import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.HashMap;
 
-public class ListnerMainUnicast implements Runnable{
+public class ListenerMainUnicast implements Runnable{
 
     private boolean run = true;
 
@@ -22,11 +23,15 @@ public class ListnerMainUnicast implements Runnable{
 
     private DataManager dm;
 
-    public ListnerMainUnicast(DataManager dm, int unicastPort, int MTU){
+    private ArrayList<Integer> receivedIDs;
+
+    public ListenerMainUnicast(DataManager dm, int unicastPort, int MTU){
 
         this.dm = dm;
         this.unicastPort = unicastPort;
         this.MTU = MTU;
+
+        this.receivedIDs = new ArrayList<Integer>();
 
         this.infoReceiverManager = new HashMap<String, TransferReceiverManager>();
 
@@ -48,27 +53,39 @@ public class ListnerMainUnicast implements Runnable{
 
     private void processDatagramPacket(DatagramPacket dp){
 
-        Object obj = getObjectFromBytes(dp.getData());
-        TransferMetaInfo tmi = null;
+            Object obj = getObjectFromBytes(dp.getData());
+            TransferMetaInfo tmi = null;
 
-        if(obj instanceof TransferMetaInfo)
             tmi = (TransferMetaInfo) obj;
 
-        //MUDAR PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS
-        if(tmi != null){
+            //MUDAR PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS
+            if (tmi != null) {
+                System.out.println("TMI NAO É NULO");
+                if(!this.receivedIDs.contains(tmi.ID)) {
+                    System.out.println("NAO RECEBI ESTE ID");
+                    this.receivedIDs.add(tmi.ID);
+                    if (!this.dm.hasChunkManager(tmi.cmmi.Hash)) {
+                        System.out.println("AIND NAO TENHO ESTE CM");
+                        if (tmi.DocumentName != null)
+                            this.dm.newDocument(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks, tmi.DocumentName);
+                        else
+                            this.dm.newMessage(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks);
 
-            if(!this.dm.hasChunkManager(tmi.cmmi.Hash)) {
-                if (tmi.DocumentName != null)
-                    this.dm.newDocument(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks, tmi.DocumentName);
+                        System.out.println("HERE");
+                    }
+                    //!!!!!!!!!!!!!!!!!!!!!!! TRATAR DO CASO EM QUE JÁ POSSUI O CM
+
+                    TransferReceiverManager trm = new TransferReceiverManager(this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 10);
+                    trm.startReceiverManager();
+                    System.out.println("TRM STARTED");
+                    this.infoReceiverManager.put(tmi.cmmi.Hash, trm);
+                }
                 else
-                    this.dm.newMessage(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks);
+                    System.out.println("ALREADY HAVE THE ID");
             }
-        }
-
-            TransferReceiverManager trm = new TransferReceiverManager(this. dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 10);
-
-            this.infoReceiverManager.put(tmi.cmmi.Hash, trm);
-
+            else {
+                System.out.println("TMI NULL ");
+            }
     }
     public void run(){
         try {
@@ -81,6 +98,7 @@ public class ListnerMainUnicast implements Runnable{
                 this.unicastSocket.receive(dp);
 
                 processDatagramPacket(dp);
+                System.out.println("RECEIVED SOMETHING");
             }
 
         }

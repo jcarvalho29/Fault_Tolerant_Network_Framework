@@ -18,12 +18,19 @@ public class Scheduler {
         }
 
         if(smi == null) {
+            createNetworkFolder(Root);
             this.smi = new SchedulerMetaInfo(Root);
             writeSchedulerMetaInfoFile();
         }
         else {
             this.smi = smi;
         }
+    }
+
+    private void createNetworkFolder(String Root) {
+        String path = folderPathNormalizer(Root) + "Network/";
+        File root = new File(path);
+        while(!root.exists() && !root.isDirectory() && !root.mkdir());
     }
 
     /*

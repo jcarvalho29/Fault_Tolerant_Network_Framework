@@ -35,6 +35,9 @@ public class DataManager {
         }
 
         if(dmmi == null) {
+            System.out.println("DMMI NULL");
+            createDataFolders(Root);
+            System.out.println("CREATED DATA FOLDER");
             this.dmMI = new DataManagerMetaInfo(Root);
 
             this.documents = new HashMap<String, Document>();
@@ -49,6 +52,15 @@ public class DataManager {
 
         }
     }
+
+    private void createDataFolders(String Root) {
+
+        String path = Root + "Data/";
+        System.out.println(path);
+        File root = new File(path);
+        while(!root.exists() && !root.isDirectory() && !root.mkdir());
+    }
+
     /*
     * Constructs a Document object that uses a Data.ChunkManager to divide the file provided by the combination of localFilePath/filename
     * into chunks that can be found on the folder root/MacAddress/(FileHash)/Chunks.
@@ -57,7 +69,6 @@ public class DataManager {
     * */
     public String newDocument(String MacAddress, String localDocumentPath, String hashAlgorithm, int maxDatagramSize){
         String hash = null;
-        checkFolders(MacAddress);
 
         String[] pathSplited = localDocumentPath.split("/");
         String documentName = pathSplited[pathSplited.length-1];
@@ -85,7 +96,6 @@ public class DataManager {
     }
     public String newDocument(String MacAddress, String localDocumentPath, int maxDatagramSize){
         String hash = null;
-        checkFolders(MacAddress);
 
         String[] pathSplited = localDocumentPath.split("/");
         String documentName = pathSplited[pathSplited.length-1];
@@ -98,6 +108,7 @@ public class DataManager {
         if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
             registerMacHashs(MacAddress, hash);
             //guardar o file
+            System.out.println("REGISTERED WITH " + hash);
             this.documents.put(hash, f);
 
             //assinala que o ficheiro esta completo
@@ -121,7 +132,6 @@ public class DataManager {
     * */
     public String newDocument(String MacAddress, String localDocumentPath, int maxDatagramSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
         String hash = null;
-        checkFolders(MacAddress);
 
         String[] pathSplited = localDocumentPath.split("/");
         String documentName = pathSplited[pathSplited.length-1];
@@ -149,7 +159,6 @@ public class DataManager {
     }
     public String newDocument(String MacAddress, String localDocumentPath, int maxDatagramSize, int maxChunksLoadedAtaTime){
         String hash = null;
-        checkFolders(MacAddress);
 
         String[] pathSplited = localDocumentPath.split("/");
         String documentName = pathSplited[pathSplited.length-1];
@@ -181,7 +190,6 @@ public class DataManager {
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
     public void newDocument(String MacAddress, String hash, String hashAlgorithm, int numberOfChunks, String documentName) {
-        checkFolders(MacAddress);
 
         if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
 
@@ -202,11 +210,10 @@ public class DataManager {
         }
     }
     public void newDocument(String MacAddress, String hash, int numberOfChunks, String documentName) {
-        checkFolders(MacAddress);
 
         if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
-
-            Document f = new Document(this.dmMI.Root, MacAddress, hash, "SHA-256", numberOfChunks, documentName);
+            System.out.println("ITS NEW DOCUMENT");
+            Document f = new Document(this.dmMI.Root, MacAddress, hash, numberOfChunks, documentName, "SHA-256");
 
             registerMacHashs(MacAddress, hash);
 
@@ -230,10 +237,21 @@ public class DataManager {
     private void addChunksToDocument (String MacAddress, String hash, ArrayList<Chunk> chunks){
         Document f;
 
-        if ((this.dmMI.macHashs.get(MacAddress).contains(hash)) && (!this.dmMI.isDocumentFull.get(hash))){
+        ArrayList<String> DocumentHashs;
+
+        if(this.dmMI.macHashs.containsKey(MacAddress))
+            DocumentHashs = this.dmMI.macHashs.get(MacAddress);
+        else
+            DocumentHashs = new ArrayList<>();
+
+        boolean a = (DocumentHashs.contains(hash));
+        boolean b = (!this.dmMI.isDocumentFull.get(hash));
+        //System.out.println(a + " " + b);
+        if ((DocumentHashs.contains(hash)) && (!this.dmMI.isDocumentFull.get(hash))) {
             f = this.documents.get(hash);
+
             f.addChunks(chunks);
-            if(f.isFull())
+            if (f.isFull())
                 this.dmMI.isDocumentFull.put(hash, true);
             this.documents.put(hash, f); //???????? PReciso????
         }
@@ -299,7 +317,6 @@ public class DataManager {
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
     public String newMessage(String MacAddress, byte[] info, int maxDatagramSize, String hashAlgorithm){
-        checkFolders(MacAddress);
         String hash = null;
 
         ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, info, maxDatagramSize, hashAlgorithm);
@@ -322,7 +339,6 @@ public class DataManager {
     }
     public String newMessage(String MacAddress, byte[] info, int maxDatagramSize){
         String hash = null;
-        checkFolders(MacAddress);
         ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, info, maxDatagramSize, "SHA-256");
         hash = cm.getHash();
 
@@ -399,12 +415,15 @@ public class DataManager {
     /*
     * Tries to add the specified chunks to a ChunkManager defined by the provided Hash
     * */
-    public void addChunks(String MacAddress, String Hash, ArrayList<Chunk> chunks){
-        if(this.documents.containsKey(Hash))
-            addChunksToDocument(Hash, MacAddress, chunks);
+    public void addChunks(String MacAddress, String Hash, ArrayList<Chunk> chunks) {
+        if (this.documents.containsKey(Hash)) {
+            addChunksToDocument(MacAddress, Hash, chunks);
+            System.out.println(chunks.size() + " CHUNKS ADDED");
+        }
         else
-            if(this.messages.containsKey(Hash))
+            if (this.messages.containsKey(Hash)) {
                 addChunksToMessage(MacAddress, Hash, chunks);
+        }
     }
 
     /*
@@ -462,17 +481,6 @@ public class DataManager {
 
         hashs.add(hash);
         this.dmMI.macHashs.put(MacAddress, hashs);
-    }
-
-    /*
-    * Checks if a MacAddress Folder exists, if not it will be created
-    * */
-    private void checkFolders(String MacAddress){
-        if(!this.dmMI.macHashs.containsKey(MacAddress)) {
-            File macFolder = new File(this.dmMI.Root + "/" + MacAddress + "/");
-
-            while (!macFolder.exists() && !macFolder.isDirectory() && !macFolder.mkdir()) ;
-        }
     }
 
     /*

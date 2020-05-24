@@ -39,6 +39,17 @@ public class ChunkManager {
 
     public ChunkManager (String root, String mac, String hash, String hashAlgorithm,  int numberOfChunks){
         root = folderPathNormalizer(root);
+
+        String hashFolderPath = root + hash + "/";
+        File hashFolder = new File(hashFolderPath);
+
+        while((!hashFolder.exists() && !hashFolder.isDirectory()) && !hashFolder.mkdir());
+
+        String chunksFolderPath = hashFolderPath + "Chunks/";
+        File chunksFolder = new File(chunksFolderPath);
+
+        while((!chunksFolder.exists() && !chunksFolder.isDirectory()) && !chunksFolder.mkdir());
+
         this.Root = root;
         this.MacAddress = mac;
 
@@ -88,7 +99,7 @@ public class ChunkManager {
         this.mi.HashAlgoritm = hashAlgorithm;
         this.mi.Hash = sha_256_Chunks(chunks, hashAlgorithm);
 
-        File hashFolder = new File(this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/");
+        File hashFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
 
         writeChunksToFolder(chunks, this.mi.numberOfChunks);
@@ -111,7 +122,7 @@ public class ChunkManager {
         this.mi.Hash = "TMPFILE";
         this.mi.HashAlgoritm = hashAlgorithm;
 
-        File tempFolder = new File(this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/");
+        File tempFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!tempFolder.exists() && !tempFolder.isDirectory() && !tempFolder.mkdir()) ;
 
         this.mi.datagramMaxSize = datagramMaxSize;
@@ -122,13 +133,13 @@ public class ChunkManager {
 
         this.mi.numberOfChunksInArray = 0;
 
-        String oldpath = this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/Chunks/";
+        String oldpath = this.Root + "/" + this.mi.Hash + "/Chunks/";
         this.mi.Hash = loadInfoRamEfficient(localFilePath, maxChunksLoadedAtaTime);
-        String newpath = this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/Chunks/";
+        String newpath = this.Root + "/" + this.mi.Hash + "/Chunks/";
 
-        File hashFolder = new File(this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/");
+        File hashFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
-        hashFolder = new File(this.Root + "/" + MacAddress + "/" + this.mi.Hash + "/Chunks/");
+        hashFolder = new File(this.Root + "/" + this.mi.Hash + "/Chunks/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
 
 
@@ -153,7 +164,7 @@ public class ChunkManager {
     * Writes the Data.DocumentMetaInfo to a file within the root/mac/hash path
     */
     public void writeDocumentMetaInfoToFile(){
-        String FileInfoPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/";
+        String FileInfoPath = this.Root + this.mi.Hash + "/";
         String documentMetaInfoFilePath = FileInfoPath + "ChunkManagerMeta.info";
 
         File FileInfo = new File(FileInfoPath);
@@ -176,7 +187,7 @@ public class ChunkManager {
     * Reads the meta info from root/mac/hash and initializes the MetaInfo object
     */
     public void readDocumentMetaInfoFromFile(String hash){
-        String FileInfoPath = this.Root + this.MacAddress + "/" + hash + "/";
+        String FileInfoPath = this.Root + hash + "/";
         String documentMetaInfoFilePath = FileInfoPath + "ChunkManagerMeta.info";
 
         File FileInfo = new File(FileInfoPath);
@@ -201,7 +212,7 @@ public class ChunkManager {
     * Deletes the current Meta Info File in root/mac/hash and writes the new Meta Info to the same path
     */
     public void updateDocumentMetaInfoFile(){
-        String FileInfoPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/";
+        String FileInfoPath = this.Root + this.mi.Hash + "/";
         String documentMetaInfoFilePath = FileInfoPath + "ChunkManagerMeta.info";
 
         File FileInfo = new File(FileInfoPath);
@@ -282,7 +293,7 @@ public class ChunkManager {
     */
     private void writeChunksToFolder(ArrayList <Chunk> fcs, int size){
         int i;
-        String folderPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
+        String folderPath = this.Root + this.mi.Hash + "/Chunks/";
         File ficheiro = new File(folderPath);
         File filePointer;
         String path;
@@ -301,6 +312,8 @@ public class ChunkManager {
                     file = Paths.get(path);
                     Files.write(file, fc.getChunk());
                 }
+                else
+                    System.out.println("REPEATED CHUNK" + fc.getPlace());
             }
                 catch (Exception e) {
                 e.printStackTrace();
@@ -319,7 +332,7 @@ public class ChunkManager {
     * This will read ALL the chunks, aggregate them into a byte[] and return said byte[]
     * */
     public byte[] getInfoInByteArray(){
-        String folderToReadPath = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
+        String folderToReadPath = this.Root + this.mi.Hash + "/Chunks/";
 
         int i = 0;
         int numberOfChunks = this.mi.numberOfChunks;
@@ -354,7 +367,7 @@ public class ChunkManager {
     *   ArrayList<FileChunk> fcs => Newly received Filechunks to be written
     */
     public boolean addChunks (ArrayList<Chunk> fcs){
-
+        //System.out.println("IN CHUNK MANAGER");
         for(Chunk fc: fcs) {
             //System.out.println("ID!!! => " + fc.getPlace());
             if(this.mi.missingChunks.contains(fc.getPlace())) {
@@ -399,7 +412,7 @@ public class ChunkManager {
     * */
     public ArrayList<Chunk> getChunks(int start, int len){
         start += Integer.MIN_VALUE;
-        String tmpFolder = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
+        String tmpFolder = this.Root + this.mi.Hash + "/Chunks/";
 
         File document = new File (tmpFolder);
         ArrayList<Chunk> fChunks = null;
@@ -428,17 +441,17 @@ public class ChunkManager {
      * This function is intended to be used to retrieve FileChunks that have been marked as Missing by a File Receiver.
      */
     public ArrayList<Chunk> getMissingChunks(ArrayList<Integer> mfc){
-
-        String tmpFolder = this.Root + this.MacAddress + "/" + this.mi.Hash + "/Chunks/";
+        String tmpFolder = this.Root + this.mi.Hash + "/Chunks/";
 
         File ficheiro = new File (tmpFolder);
         ArrayList<Chunk> res = new ArrayList<Chunk>();
-
+        int id;
         try {
             if(ficheiro.exists() && ficheiro.isDirectory()){
                 Chunk f;
-                for(Integer i : mfc){
-                    f = new Chunk(Files.readAllBytes(Paths.get(tmpFolder + "/" + i + ".chunk")), i);
+                for(int i = 0; i < mfc.size(); i++){
+                    id = mfc.get(i);
+                    f = new Chunk(Files.readAllBytes(Paths.get(tmpFolder + "/" + id + ".chunk")), id);
                     res.add(f);
                 }
 
@@ -459,21 +472,83 @@ public class ChunkManager {
 
 
     public ArrayList<CompressedMissingChunksID> getCompressedMissingChunksID(int maxSize){
-        ArrayList<Integer> missingChunks = new ArrayList<Integer>(this.mi.missingChunks);
+        ArrayList<Integer> missingChunks;
         ArrayList<CompressedMissingChunksID> res = new ArrayList<CompressedMissingChunksID>();
 
+        int actualMaxSize = maxSize+1;
         if(this.mi.missingChunks.size() == this.mi.numberOfChunks)
             res = null;
         else{
-            while(missingChunks.size() > 0){
-                System.out.println("A Processar Compressed MissingChunks" + missingChunks.size() + " left");
+            int sizeParam = 4 * maxSize;
 
-                res.add(getCompressedMissingChunksID(missingChunks, maxSize));
+            while(res.size() != 1 && (actualMaxSize > maxSize || actualMaxSize < maxSize*0.9)) {
+                res.clear();
+                missingChunks = new ArrayList<Integer>(this.mi.missingChunks);
+
+                while (missingChunks.size() > 0) {
+                    System.out.println("A Processar Compressed MissingChunks " + missingChunks.size() + " left ( MAX SIZE: " + maxSize + " )");
+                    CompressedMissingChunksID cmcID = getCompressedMissingChunksID(missingChunks, sizeParam);
+                    res.add(cmcID);
+                }
+                actualMaxSize = maxSize(res);
+
+                if(actualMaxSize > maxSize) {
+                    sizeParam = (int) (sizeParam * 0.95);
+                    System.out.println("DEMASIADO GRANDE " + actualMaxSize + " vs " + maxSize);
+                }
+                else {
+                    if (actualMaxSize < maxSize * 0.9) {
+                        sizeParam = (int) (sizeParam * 1.05);
+                        System.out.println("DEMASIADO PEQUENO " + actualMaxSize + " vs " + maxSize);
+                    }
+                }
             }
+
         }
 
+        System.out.println("FINAL ACTUALMAXSIZE => " + actualMaxSize);
         return res;
     }
+
+    private int maxSize (ArrayList <CompressedMissingChunksID> cmcIDs){
+        byte[] sizeTester;
+        int maxSize = 0;
+
+        for(CompressedMissingChunksID cmcid : cmcIDs){
+            sizeTester = getBytesFromObject(cmcid);
+            if(sizeTester.length > maxSize)
+                maxSize = sizeTester.length;
+        }
+
+        return maxSize;
+    }
+
+    private byte[] getBytesFromObject(Object obj) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream out = null;
+
+        try {
+            out = new ObjectOutputStream(bos);
+            out.writeObject(obj);
+            out.flush();
+
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            try {
+                bos.close();
+            }
+            catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+        byte[] data = bos.toByteArray();
+
+        return data;
+    }
+
     private CompressedMissingChunksID getCompressedMissingChunksID(ArrayList<Integer> missingChunks, int maxSize){
 
         //System.out.println(mfcGroup);
@@ -484,40 +559,30 @@ public class ChunkManager {
         int currentID = referenceID;
         int currentSize = Integer.SIZE;
         int counter = 0;
-        ArrayList<Integer> toAdd = new ArrayList<Integer>();
-        int toAddAux = 0;
-        int pointer = 0;
+
+        ArrayList<Boolean> toAdd = new ArrayList<Boolean>();
 
         ArrayList<Byte> inc = new ArrayList<Byte>();
 
         mfcGroup.remove(0);
 
         int dif = Byte.MAX_VALUE - Byte.MIN_VALUE;
-
-        for (int i = 0; currentSize < maxSize && i < mfcGroup.size(); i++) {
-            int id = mfcGroup.get(i);
+       // System.out.println("CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
+        while (currentSize < maxSize &&  mfcGroup.size() > 0) {
+            //System.out.println("    CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize + "\n i " + i + " mfc.size " + mfcGroup.size());
+            int id = mfcGroup.get(0);
+            mfcGroup.remove(0);
+            //System.out.println(currentID + " + " + dif + " < " + id + " " + mfcGroup.isEmpty());
             while (currentID + dif < id) {
-                if (pointer == 8) {
-                    toAdd.add(toAddAux);
-                    currentSize += Byte.SIZE;
-                    //System.out.println("TO ADD => (int)" + toAddAux + " (byte)" + (byte)(toAddAux + Byte.MIN_VALUE));
-                    pointer = 0;
-                    toAddAux = 0;
-                }
-                pointer++;
-                toAddAux *= 2;
+                //System.out.println("        CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
+                toAdd.add(false);
                 currentID += dif;
+                currentSize += 1;
             }
-            if (pointer == 8) {
-                toAdd.add(toAddAux);
-                currentSize += Byte.SIZE;
-                //System.out.println("TO ADD => (int)" + toAddAux + " (byte)" + (byte)(toAddAux + Byte.MIN_VALUE));
-                pointer = 0;
-                toAddAux = 0;
-            }
-            pointer++;
-            toAddAux *= 2;
-            toAddAux++;
+
+            toAdd.add(true);
+            currentSize +=1;
+
             //System.out.println("INC TO ADD => " + (byte)(id - currentID + Byte.MIN_VALUE));
             inc.add((byte) (id - currentID + Byte.MIN_VALUE));
             currentSize += Byte.SIZE;
@@ -525,55 +590,13 @@ public class ChunkManager {
             counter++;
 
         }
-        if (pointer == 8) {
-            toAdd.add(toAddAux);
-            currentSize += Byte.SIZE;
-            //System.out.println("TO ADD => (int)" + toAddAux + "\n\tpointer => " + pointer);
-        }
 
-        ArrayList<Byte> invertedToAdd = new ArrayList<Byte>();
-        int invertedToAddAux;
+        //System.out.println("MAX SIZE => " + maxSize + " | CURRENTSIZE => " + currentSize);
 
-        for (int b : toAdd) {
-            //System.out.println("ANTES => " + b);
-            invertedToAddAux = 0;
-
-            for (int i = 0; i < 8; i++) {
-                invertedToAddAux *= 2;
-                if (b % 2 == 1) {
-                    invertedToAddAux++;
-                }
-                b /= 2;
-            }
-
-            //System.out.println("DEPOIS => " + invertedToAddAux);
-            //aux = invertedToAddAux;
-            //auxb = (byte)(invertedToAddAux - Byte.MIN_VALUE);
-            invertedToAdd.add((byte) (invertedToAddAux - Byte.MIN_VALUE));
-        }
-
-        if (pointer < 8) {
-            //System.out.println("TO ADD => (int)" + toAddAux + "\n\tpointer => " + pointer);
-            invertedToAddAux = 0;
-
-            for (int i = 0; i < pointer; i++) {
-                invertedToAddAux *= 2;
-                if (toAddAux % 2 == 1) {
-                    invertedToAddAux++;
-                }
-                toAddAux /= 2;
-
-            }
-            //aux = invertedToAddAux;
-            //auxb = (byte)(invertedToAddAux - Byte.MIN_VALUE);
-            invertedToAdd.add((byte) (invertedToAddAux - Byte.MIN_VALUE));
-        }
-
-        //System.out.println("INVERTED => " + aux + "\nIN BYTE => " + auxb);
         //System.out.println("\tINC SIZE => " + inc.size() + "\n\tTO ADD SIZE => " + toAdd.size() + "\n\tINVERTED TO ADO SIZ => " + invertedToAdd.size() + "\n\tPOINTER => " + pointer);
-        byte[] toAddArray = new byte[invertedToAdd.size()];
-        for (int i = 0; i < invertedToAdd.size(); i++)
-            toAddArray[i] = invertedToAdd.get(i);
+        boolean[] toAddArray = new boolean[toAdd.size()];
+        for (int i = 0; i < toAdd.size(); i++)
+            toAddArray[i] = toAdd.get(i);
 
         byte[] incArray = new byte[inc.size()];
         for (int i = 0; i < inc.size(); i++) {
@@ -589,40 +612,36 @@ public class ChunkManager {
     public ArrayList<Integer> getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
         ArrayList<Integer> res = new ArrayList<Integer>();
 
+/*        System.out.println("TOADD:");
+        for(boolean b : cmcid.toAdd){
+            System.out.print(b + " | ");
+        }
+        System.out.println("INC:");
+        for(byte i : cmcid.increments)
+            System.out.print(i + " | ");*/
+
         int currentID = cmcid.referenceID;
-        byte[] toAdd = cmcid.toAdd;
-        byte[] inc = cmcid.increments;
 
         int maxValue = Byte.MAX_VALUE - Byte.MIN_VALUE;
 
         res.add(currentID);
         int i = 0;
-        int toAddAux = 0;
-        int pointer;
+        int toAddAux;
 
-        for (byte ta : toAdd){
-            toAddAux = (int)ta - Byte.MIN_VALUE;
-            //System.out.println("THIS HERE => " + toAddAux);
+        for(byte increment : cmcid.increments){
+            toAddAux = (int)increment - Byte.MIN_VALUE;
 
-            for(pointer = 0; pointer < 8 && i < inc.length; pointer ++) {
-                if (toAddAux % 2 == 0) {
-                    //System.out.println("TO ADD ERA PAR");
-                    currentID += maxValue;
-                }
-                else {
-                    //System.out.println("TO ADD ERA IMPAR |" + "inc[" + i + "] = " + inc[i]);
-                    currentID += ((int) inc[i++]) - Byte.MIN_VALUE;
-                    res.add(currentID);
-                }
-                toAddAux /=2;
+            while(i < cmcid.toAdd.length && !cmcid.toAdd[i]) {
+                currentID += maxValue;
+                i++;
             }
-/*            if(pointer == 8)
-                System.out.println("POINTER");
-            else
-                System.out.println("INC SIZE | POINTER => " + pointer);*/
 
+            if(i < cmcid.toAdd.length){
+                currentID += toAddAux;
+                res.add(currentID);
+                i++;
+            }
         }
-
 
         //System.out.println(res);
         return res;
@@ -709,7 +728,7 @@ public class ChunkManager {
     public void eraseChunks(){
 
 
-        String path = this.Root + this.MacAddress + "/" + this.mi.Hash + "/";
+        String path = this.Root + this.mi.Hash + "/";
         File c = new File(path + "/Chunks");
         try {
             FileUtils.cleanDirectory(c);
@@ -741,5 +760,9 @@ public class ChunkManager {
 
 
         return path;
+    }
+
+    public ChunkManagerMetaInfo getCMMI(){
+        return this.mi;
     }
 }
