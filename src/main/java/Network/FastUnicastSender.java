@@ -12,6 +12,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class FastUnicastSender implements Runnable{
@@ -20,7 +22,7 @@ public class FastUnicastSender implements Runnable{
     private InetAddress IP;
     private int destPort;
     private int dpPS;
-
+    private ReentrantLock dpsLock;
     private DatagramSocket ds;
 
     private ChunkManager cm;
@@ -40,6 +42,7 @@ public class FastUnicastSender implements Runnable{
         this.IP = IP;
         this.destPort = destPort;
         this.dpPS = dpPS;
+        this.dpsLock = new ReentrantLock();
 
         this.cm = cm;
         this.cToSend = new ArrayList<Chunk>();
@@ -55,7 +58,9 @@ public class FastUnicastSender implements Runnable{
 
         try {
             this.ds = new DatagramSocket();
+            int oldSpace = this.ds.getSendBufferSize();
             this.ds.setSendBufferSize(3000000);
+            System.out.println("HAD THIS SPACE => " + oldSpace + "\nGOT THIS SPACE => " + this.ds.getSendBufferSize());
         }
         catch (Exception e){
             e.printStackTrace();
@@ -90,8 +95,6 @@ public class FastUnicastSender implements Runnable{
         this.isRunning_lock.lock();
         this.isRunning = true;
         this.isRunning_lock.unlock();
-        boolean flag = true;
-        int counter = 0;
 
         ArrayList<Chunk> tmp = new ArrayList<>();
         this.ChunkArrays_lock.lock();
@@ -112,15 +115,40 @@ public class FastUnicastSender implements Runnable{
         }
         this.ChunkArrays_lock.unlock();
 
+        int cycleExecTime;
+        Date cycleStart = new Date(), cycleEnd;
+        int burst = 0;
+        Random rand = new Random();
         this.isRunning_lock.lock();
+
         while (this.cToSend.size() > 0 || chunkIDs.size() > 0){
             this.isRunning_lock.unlock();
             try {
-                sendFileChunk(this.cToSend.get(0));
-                counter++;
-                Thread.sleep(1000 / this.dpPS);
+                if(this.cToSend.size() > 0){
 
-                this.cToSend.remove(0);
+                    sendFileChunk(this.cToSend.get(0));
+
+                    cycleEnd = new Date();
+                    cycleExecTime = (int) (cycleEnd.getTime() - cycleStart.getTime());
+
+                    this.dpsLock.lock();
+                    int dps = this.dpPS;
+                    this.dpsLock.unlock();
+                    //burst++;
+                    if (cycleExecTime < 1000 / dps) {
+                        //System.out.println("SLEEP FOR " + ((1000 / this.dpPS) - cycleExecTime) + " (" + cycleExecTime + ")" );
+                        //Para fazer um efeito de Burst
+                        /*if(burst == dps){
+                            Thread.sleep(rand.nextInt(200)+100);
+                            burst = 0;
+                        }
+                        else*/
+                            Thread.sleep((1000 / dps) - cycleExecTime);
+                    }
+
+                    cycleStart = new Date();
+                    this.cToSend.remove(0);
+                }
 
                 if (this.cToSend.size() == 0) {
                     this.ChunkArrays_lock.lock();
@@ -152,7 +180,6 @@ public class FastUnicastSender implements Runnable{
         }
         this.isRunning = false;
         this.isRunning_lock.unlock();
-        //System.out.println("Enviei " + counter + " FILECHUNKS");
     }
 
     private byte[] getBytesFromObject(Object obj) {
@@ -206,6 +233,12 @@ public class FastUnicastSender implements Runnable{
         this.isRunning_lock.unlock();
 
         return res;
+    }
+
+    public void changeDPS(int dps){
+        this.dpsLock.lock();
+        this.dpPS = dps;
+        this.dpsLock.unlock();
     }
 
     private ArrayList<Integer> copyArrayListSection(ArrayList<Integer> original, int start, int end){

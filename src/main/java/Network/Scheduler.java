@@ -10,11 +10,11 @@ public class Scheduler {
 
     public Scheduler(String Root, boolean fetch){
         SchedulerMetaInfo smi = null;
-        Root = folderPathNormalizer(Root);
+        Root = folderPathNormalizer(Root + "Network/");
 
 
         if (fetch) {
-            smi = fetchSMI(Root + "Network/");
+            smi = fetchSMI(Root);
         }
 
         if(smi == null) {
@@ -28,7 +28,7 @@ public class Scheduler {
     }
 
     private void createNetworkFolder(String Root) {
-        String path = folderPathNormalizer(Root) + "Network/";
+        String path = folderPathNormalizer(Root);
         File root = new File(path);
         while(!root.exists() && !root.isDirectory() && !root.mkdir());
     }
@@ -136,19 +136,47 @@ public class Scheduler {
 
     public void editPort(String ip, int priority, String infoHash, int newPort){
         ArrayList<Transmission> transmissions = null;
+        boolean flag = false;
+        Transmission t;
 
         if(this.smi.infoByIP_Priority.containsKey(ip)) {
             if (this.smi.infoByIP_Priority.get(ip).containsKey(priority)) {
                 transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
+
+                for(int i = 0; !flag && i < transmissions.size(); i++){
+                    t = transmissions.get(i);
+                    if(t.infoHash.equals(infoHash))
+                        flag = true;
+
+                    t.port = newPort;
+
+                    deleteTransmissionFromFolder(ip, priority, infoHash);
+                    writeTransmissionToFolder(ip, priority, t);
+                }
             }
         }
+    }
 
-        if(transmissions != null) {
-            Transmission t = readTransmission(ip, priority, infoHash);
-            t.port = newPort;
+    public void editInterrupted(String ip, int priority, String infoHash, boolean wasInterrupted){
+        ArrayList<Transmission> transmissions = null;
+        boolean flag = false;
+        Transmission t;
 
-            deleteTransmissionFromFolder(ip, priority, infoHash);
-            writeTransmissionToFolder(ip, priority, t);
+        if(this.smi.infoByIP_Priority.containsKey(ip)) {
+            if (this.smi.infoByIP_Priority.get(ip).containsKey(priority)) {
+                transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
+
+                for(int i = 0; !flag && i < transmissions.size(); i++){
+                    t = transmissions.get(i);
+                    if(t.infoHash.equals(infoHash))
+                        flag = true;
+
+                    t.wasInterrupted = wasInterrupted;
+
+                    deleteTransmissionFromFolder(ip, priority, infoHash);
+                    writeTransmissionToFolder(ip, priority, t);
+                }
+            }
         }
     }
 
@@ -239,6 +267,7 @@ public class Scheduler {
     }
 
     public boolean isScheduled(String hash){
+        ///!!!!!!!!!!!!!!!!!!!!!!!!
         return this.smi.Hashs.contains(hash);
     }
     private void removeTransmissionFromArrayList(ArrayList<Transmission> transmissions, Transmission t){

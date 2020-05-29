@@ -14,7 +14,7 @@ public class DataManager {
 
 
     public DataManager(String Root){
-        Root = folderPathNormalizer(Root);
+        Root = folderPathNormalizer(Root + "Data/");
 
         this.dmMI = new DataManagerMetaInfo(Root);
 
@@ -27,11 +27,11 @@ public class DataManager {
 
     public DataManager(String Root, boolean fetch) {
         DataManagerMetaInfo dmmi = null;
-        Root = folderPathNormalizer(Root);
+        Root = folderPathNormalizer(Root + "Data/");
 
 
         if (fetch) {
-            dmmi = fetchDMMI(Root + "Data/");
+            dmmi = fetchDMMI(Root);
         }
 
         if(dmmi == null) {
@@ -48,14 +48,15 @@ public class DataManager {
         }
         else {
             this.dmMI = dmmi;
-            fetchChunkManagers(Root);
+            System.out.println("RESTORED DMMI");
 
+            fetchChunkManagers(Root);
         }
     }
 
     private void createDataFolders(String Root) {
 
-        String path = Root + "Data/";
+        String path = Root;
         System.out.println(path);
         File root = new File(path);
         while(!root.exists() && !root.isDirectory() && !root.mkdir());
@@ -67,7 +68,7 @@ public class DataManager {
     * After the construction of the Document object, it is registered the MacAddress that solicited the creation of this file
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
-    public String newDocument(String MacAddress, String localDocumentPath, String hashAlgorithm, int maxDatagramSize){
+    public String newDocument(String localDocumentPath, String hashAlgorithm, int maxDatagramSize){
         String hash = null;
 
         String[] pathSplited = localDocumentPath.split("/");
@@ -75,11 +76,11 @@ public class DataManager {
 
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
-        Document f = new Document(this.dmMI.Root, MacAddress, localDocumentPath, documentName, maxDatagramSize, hashAlgorithm);
+        Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, hashAlgorithm);
         hash = f.getHash();
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
-            registerMacHashs(MacAddress, hash);
+        if(!(this.dmMI.cmHashs.contains(hash))) {
+            registerHash(hash);
             //guardar o file
             this.documents.put(hash, f);
 
@@ -94,7 +95,7 @@ public class DataManager {
 
         return hash;
     }
-    public String newDocument(String MacAddress, String localDocumentPath, int maxDatagramSize){
+    public String newDocument(String localDocumentPath, int maxDatagramSize){
         String hash = null;
 
         String[] pathSplited = localDocumentPath.split("/");
@@ -102,11 +103,11 @@ public class DataManager {
 
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
-        Document f = new Document(this.dmMI.Root, MacAddress, localDocumentPath, documentName, maxDatagramSize, "SHA-256");
+        Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, "SHA-256");
         hash = f.getHash();
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
-            registerMacHashs(MacAddress, hash);
+        if(!(this.dmMI.cmHashs.contains(hash))) {
+            registerHash(hash);
             //guardar o file
             System.out.println("REGISTERED WITH " + hash);
             this.documents.put(hash, f);
@@ -130,7 +131,7 @@ public class DataManager {
      * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
      * This constructor will limit the number of chunks in Ram to maxChunksLoadedAtaTime
     * */
-    public String newDocument(String MacAddress, String localDocumentPath, int maxDatagramSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
+    public String newDocument(String localDocumentPath, int maxDatagramSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
         String hash = null;
 
         String[] pathSplited = localDocumentPath.split("/");
@@ -138,11 +139,11 @@ public class DataManager {
 
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
-        Document f = new Document(this.dmMI.Root, MacAddress, localDocumentPath, documentName, maxDatagramSize, hashAlgorithm,maxChunksLoadedAtaTime);
+        Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, hashAlgorithm,maxChunksLoadedAtaTime);
         hash = f.getHash();
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
-            registerMacHashs(MacAddress, hash);
+        if(!(this.dmMI.cmHashs.contains(hash))) {
+            registerHash(hash);
             //guardar o file
             this.documents.put(hash, f);
 
@@ -157,7 +158,7 @@ public class DataManager {
 
         return hash;
     }
-    public String newDocument(String MacAddress, String localDocumentPath, int maxDatagramSize, int maxChunksLoadedAtaTime){
+    public String newDocument(String localDocumentPath, int maxDatagramSize, int maxChunksLoadedAtaTime){
         String hash = null;
 
         String[] pathSplited = localDocumentPath.split("/");
@@ -165,11 +166,11 @@ public class DataManager {
 
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
-        Document f = new Document(this.dmMI.Root, MacAddress, localDocumentPath, documentName, maxDatagramSize, "SHA-256",maxChunksLoadedAtaTime);
+        Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, "SHA-256",maxChunksLoadedAtaTime);
         hash = f.getHash();
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
-            registerMacHashs(MacAddress, hash);
+        if(!(this.dmMI.cmHashs.contains(hash))) {
+            registerHash(hash);
             //guardar o file
             this.documents.put(hash, f);
 
@@ -189,13 +190,13 @@ public class DataManager {
     * Constructs a Document object for Documents to be received. It is needed to continuously add the chunks that are missing.
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
-    public void newDocument(String MacAddress, String hash, String hashAlgorithm, int numberOfChunks, String documentName) {
+    public void newDocument(String hash, String hashAlgorithm, int numberOfChunks, String documentName) {
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+        if(!(this.dmMI.cmHashs.contains(hash))) {
 
-            Document f = new Document(this.dmMI.Root, MacAddress, hash, hashAlgorithm, numberOfChunks, documentName);
+            Document f = new Document(this.dmMI.Root, hash, hashAlgorithm, numberOfChunks, documentName);
 
-            registerMacHashs(MacAddress, hash);
+            registerHash(hash);
 
             //guardar o file
             this.documents.put(hash, f);
@@ -209,13 +210,13 @@ public class DataManager {
             updateDataManagerMetaInfoFile();
         }
     }
-    public void newDocument(String MacAddress, String hash, int numberOfChunks, String documentName) {
+    public void newDocument(String hash, int numberOfChunks, String documentName) {
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+        if(!this.dmMI.cmHashs.contains(hash)) {
             System.out.println("ITS NEW DOCUMENT");
-            Document f = new Document(this.dmMI.Root, MacAddress, hash, numberOfChunks, documentName, "SHA-256");
+            Document f = new Document(this.dmMI.Root, hash, numberOfChunks, documentName, "SHA-256");
 
-            registerMacHashs(MacAddress, hash);
+            registerHash(hash);
 
             //guardar o file
             this.documents.put(hash, f);
@@ -234,20 +235,10 @@ public class DataManager {
     * Adds the provided chunks to the Document that the provided MacAddress/Hash identify. This is intended to be used with the
     * Documents that are being received and not all chunks are present in Memory.
     * */
-    private void addChunksToDocument (String MacAddress, String hash, ArrayList<Chunk> chunks){
+    private void addChunksToDocument (String hash, ArrayList<Chunk> chunks){
         Document f;
 
-        ArrayList<String> DocumentHashs;
-
-        if(this.dmMI.macHashs.containsKey(MacAddress))
-            DocumentHashs = this.dmMI.macHashs.get(MacAddress);
-        else
-            DocumentHashs = new ArrayList<>();
-
-        boolean a = (DocumentHashs.contains(hash));
-        boolean b = (!this.dmMI.isDocumentFull.get(hash));
-        //System.out.println(a + " " + b);
-        if ((DocumentHashs.contains(hash)) && (!this.dmMI.isDocumentFull.get(hash))) {
+        if ((this.dmMI.cmHashs.contains(hash)) && (this.documents.containsKey(hash)) && (!this.dmMI.isDocumentFull.get(hash))) {
             f = this.documents.get(hash);
 
             f.addChunks(chunks);
@@ -266,19 +257,19 @@ public class DataManager {
     * Removes the corresponding entry from the Documents entry
     * Updates the DataManagerMetaInfo file
     * */
-    public void deleteDocument(String MacAddress, String hash){
+    public void deleteDocument(String hash){
 
-        ArrayList <String> hashs = this.dmMI.macHashs.get(MacAddress);
-        if(hashs.contains(hash)){
-            this.documents.get(hash).delete();
-            this.documents.remove(hash);
-            this.dmMI.documentsNames.remove(hash);
-            this.dmMI.isDocumentFull.remove(hash);
+        if(this.dmMI.cmHashs.contains(hash)){
+            if(this.documents.containsKey(hash)) {
+                this.documents.get(hash).delete();
+                this.documents.remove(hash);
+                this.dmMI.documentsNames.remove(hash);
+                this.dmMI.isDocumentFull.remove(hash);
 
 
-            hashs.remove(hash);
-            this.dmMI.macHashs.put(MacAddress, hashs);
-            updateDataManagerMetaInfoFile();
+                this.dmMI.cmHashs.remove(hash);
+                updateDataManagerMetaInfoFile();
+            }
         }
     }
 
@@ -286,23 +277,32 @@ public class DataManager {
     * This will try to rebuild a Document from all the chunks that ar in root/MacAddress/hash/chunks.
     * It is required to all chunks to be in Memory
     * */
-    public Boolean assembleDocument(String MacAddress, String Hash, String destinationPath){
+    public Boolean assembleDocument(String Hash, String destinationPath){
         boolean res = false;
 
         destinationPath = folderPathNormalizer(destinationPath);
 
-        ArrayList<String> documentHashs;
         Document d;
 
-        System.out.println();
-        if(this.dmMI.macHashs.containsKey(MacAddress)){
-            documentHashs = this.dmMI.macHashs.get(MacAddress);
-
-            if(documentHashs.contains(Hash) && this.dmMI.isDocumentFull.get(Hash)){
+        System.out.println(this.dmMI.cmHashs);
+        System.out.println(this.dmMI.cmHashs.contains(Hash));
+        System.out.println(this.documents);
+        System.out.println(this.documents.containsKey(Hash));
+        System.out.println(this.dmMI.isDocumentFull.get(Hash));
+        if(this.dmMI.cmHashs.contains(Hash)){//CHECK THIS
+            System.out.println("CMHASH HAS HASH");
+            if(this.documents.containsKey(Hash) && this.dmMI.isDocumentFull.get(Hash)){//CHECK THIS
+                System.out.println("DOCUMENTS HAS HASH AND DOCUMENT IS FULL");
                 d = this.documents.get(Hash);
                 d.writeDocumentToFolder(destinationPath);
 
                 res = true;
+            }
+            else{
+                if(this.documents.containsKey(Hash))
+                    System.out.println("    DOCUMENTS HAS HASH BUT DOCUMENT IS not FULL");
+                else
+                    System.out.println("    DOCUMENTS DOESNT HAVE HASH");
             }
         }
 
@@ -316,15 +316,15 @@ public class DataManager {
     * be present in root/MacAddress/hash/chunks.
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
-    public String newMessage(String MacAddress, byte[] info, int maxDatagramSize, String hashAlgorithm){
+    public String newMessage(byte[] info, int maxDatagramSize, String hashAlgorithm){
         String hash = null;
 
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, info, maxDatagramSize, hashAlgorithm);
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, info, maxDatagramSize, hashAlgorithm);
         hash = cm.getHash();
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+        if(!(this.dmMI.cmHashs.contains(hash))) {
 
-            registerMacHashs(MacAddress, hash);
+            registerHash(hash);
 
             //guardar mensagens
             this.messages.put(hash, cm);
@@ -337,14 +337,14 @@ public class DataManager {
 
         return hash;
     }
-    public String newMessage(String MacAddress, byte[] info, int maxDatagramSize){
+    public String newMessage(byte[] info, int maxDatagramSize){
         String hash = null;
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, info, maxDatagramSize, "SHA-256");
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, info, maxDatagramSize, "SHA-256");
         hash = cm.getHash();
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+        if(!(this.dmMI.cmHashs.contains(hash))) {
 
-            registerMacHashs(MacAddress, hash);
+            registerHash(hash);
 
             //guardar mensagens
             this.messages.put(hash, cm);
@@ -362,12 +362,12 @@ public class DataManager {
     * Constructs a ChunkManager object for Messages to be received. It is needed to continuously add the chunks that are missing.
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
-    public void newMessage(String MacAddress, String hash, String hashAlgorithm, int numberOfChunks){
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, hash, hashAlgorithm, numberOfChunks);
+    public void newMessage(String hash, String hashAlgorithm, int numberOfChunks){
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, hash, hashAlgorithm, numberOfChunks);
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+        if(!(this.dmMI.cmHashs.contains(hash))) {
 
-            registerMacHashs(MacAddress, hash);
+            registerHash(hash);
 
             //guardar a mensagem
             this.messages.put(hash, cm);
@@ -378,12 +378,12 @@ public class DataManager {
             updateDataManagerMetaInfoFile();
         }
     }
-    public void newMessage(String MacAddress, String hash, int numberOfChunks){
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, MacAddress, hash, "SHA-256", numberOfChunks);
+    public void newMessage(String hash, int numberOfChunks){
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, hash, "SHA-256", numberOfChunks);
 
-        if(!(this.dmMI.macHashs.containsKey(MacAddress) && this.dmMI.macHashs.get(MacAddress).contains(hash))) {
+        if(!(this.dmMI.cmHashs.contains(hash))) {
 
-            registerMacHashs(MacAddress, hash);
+            registerHash(hash);
 
             //guardar a mensagem
             this.messages.put(hash, cm);
@@ -399,10 +399,10 @@ public class DataManager {
      * Adds the provided chunks to the ChunkManager that the provided MacAddress/Hash identify. This is intended to be used with the
      * ChunkManager that are being received and not all chunks are present in Memory.
      * */
-    private void addChunksToMessage(String MacAddress, String Hash, ArrayList<Chunk> chunks){
+    private void addChunksToMessage(String Hash, ArrayList<Chunk> chunks){
         ChunkManager cm;
 
-        if ((this.dmMI.macHashs.get(MacAddress).contains(Hash)) && (!this.dmMI.isMessageFull.get(Hash))){
+        if ((this.dmMI.cmHashs.contains(Hash)) && (!this.dmMI.isMessageFull.get(Hash))){
             cm = this.messages.get(Hash);
             cm.addChunks(chunks);
             if(cm.getFull())
@@ -415,28 +415,32 @@ public class DataManager {
     /*
     * Tries to add the specified chunks to a ChunkManager defined by the provided Hash
     * */
-    public void addChunks(String MacAddress, String Hash, ArrayList<Chunk> chunks) {
+    public void addChunks(String Hash, ArrayList<Chunk> chunks) {
         if (this.documents.containsKey(Hash)) {
-            addChunksToDocument(MacAddress, Hash, chunks);
+            addChunksToDocument(Hash, chunks);
             System.out.println(chunks.size() + " CHUNKS ADDED");
         }
         else
             if (this.messages.containsKey(Hash)) {
-                addChunksToMessage(MacAddress, Hash, chunks);
+                addChunksToMessage(Hash, chunks);
         }
     }
 
     /*
     * Retrieves the information that represents a Document/Message in a byte[]
     * */
-    public byte[] getInfoInByteArray(String MacAddress, String Hash){
+    public byte[] getInfoInByteArray(String Hash){
         byte info[] = null;
 
-        if(this.dmMI.macHashs.containsKey(MacAddress)) {
+        if(this.dmMI.cmHashs.contains(Hash)) {
             if (this.messages.containsKey(Hash) && this.dmMI.isMessageFull.get(Hash)) {
                 info = this.messages.get(Hash).getInfoInByteArray();
             }
+            else{
+                info = this.documents.get(Hash).cm.getInfoInByteArray();
+            }
         }
+
 
         return info;
     }
@@ -448,17 +452,14 @@ public class DataManager {
      * Removes the corresponding entry from the Messages entry
      * Updates the DataManagerMetaInfo file
      * */
-    public void deleteMessage(String MacAddress, String hash){
-        ArrayList<String> hashs = this.dmMI.macHashs.get(MacAddress);
+    public void deleteMessage(String hash){
 
-        if(hashs.contains(hash)){
+        if(this.dmMI.cmHashs.contains(hash)){
             this.messages.get(hash).eraseChunks();
             this.messages.remove(hash);
             this.dmMI.isMessageFull.remove(hash);
 
-            hashs.remove(hash);
-            this.dmMI.macHashs.put(hash, hashs);
-
+            this.dmMI.cmHashs.remove(hash);
             updateDataManagerMetaInfoFile();
         }
     }
@@ -468,19 +469,16 @@ public class DataManager {
     * Register a Hash under the given MacAddress
     * If a MacAddress isn't registered yet, this will register it
     * */
-    private void registerMacHashs(String MacAddress, String hash){
+    private void registerHash(String hash){
         // registar macaddress + info hash no hashmap
         ArrayList <String> hashs;
-        if(this.dmMI.macHashs.containsKey(MacAddress)) {
-            hashs = this.dmMI.macHashs.get(MacAddress);
-
+        if(!this.dmMI.cmHashs.contains(hash)) {
+            this.dmMI.cmHashs.add(hash);
+            System.out.println("REGISTERED HASH");
         }
-        else{
-            hashs = new ArrayList<String>();
-        }
+        else
+            System.out.println("    DID NOT REGISTER HASH");
 
-        hashs.add(hash);
-        this.dmMI.macHashs.put(MacAddress, hashs);
     }
 
     /*
@@ -552,7 +550,7 @@ public class DataManager {
     private DataManagerMetaInfo fetchDMMI(String Root){
         Object obj = null;
 
-        String dataManagerMetaInfoFilePath = Root + "Data/DataManagerMeta.info";
+        String dataManagerMetaInfoFilePath = Root + "DataManagerMeta.info";
 
         File dataManagerMetaInfoFile = new File(dataManagerMetaInfoFilePath);
 
@@ -567,29 +565,23 @@ public class DataManager {
     * Fetches and reconstructs the ChunkManagers structures (documents/Messages)
     * */
     private void fetchChunkManagers(String root) {
-        ArrayList <String> hashs;
-        ArrayList <ChunkManager> chunkManagers = new ArrayList<ChunkManager>();
         ChunkManager cm;
         Document d;
 
         this.documents = new HashMap<String, Document>();
         this.messages = new HashMap<String, ChunkManager>();
 
-        for(String mac : this.dmMI.macHashs.keySet()){
-            hashs = this.dmMI.macHashs.get(mac);
+        for(String hash : this.dmMI.cmHashs){
+            cm = new ChunkManager(root);
 
-            for(String hash : hashs){
-                cm = new ChunkManager(root, mac);
+            cm.readDocumentMetaInfoFromFile(hash);
 
-                cm.readDocumentMetaInfoFromFile(hash);
-
-                if(this.dmMI.documentsNames.containsKey(hash)){
-                    d = new Document(root, mac, this.dmMI.documentsNames.get(hash), cm);
-                    this.documents.put(hash, d);
-                }
-                else{
-                    this.messages.put(hash, cm);
-                }
+            if(this.dmMI.documentsNames.containsKey(hash)){
+                d = new Document(root, this.dmMI.documentsNames.get(hash), cm);
+                this.documents.put(hash, d);
+            }
+            else{
+                this.messages.put(hash, cm);
             }
         }
     }

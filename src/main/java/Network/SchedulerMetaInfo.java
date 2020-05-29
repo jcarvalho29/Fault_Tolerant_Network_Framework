@@ -12,7 +12,7 @@ public class SchedulerMetaInfo implements Serializable {
     public String Root;
 
     public SchedulerMetaInfo(String Root){
-        this.Root = Root + "Network/";
+        this.Root = Root;
         this.infoByIP_Priority = new HashMap<String, HashMap<Integer, ArrayList<Transmission>>>();
         this.Hashs = new ArrayList<String>();
     }

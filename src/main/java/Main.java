@@ -77,22 +77,28 @@ public class Main{
 
         while(true) {
             try {
-                out.println("1 - LOAD DOCUMENT");
+                out.println("0 - LOAD DOCUMENT jar");
+                out.println("1 - LOAD DOCUMENT 100MB.zip");
                 out.println("2 - LOAD MESSAGE");
                 out.println("3 - START LISTENER");
                 out.println("4 - SEND DOCUMENT");
                 out.println("5 - SEND MESSAGE");
+                out.println("6 - MOUNT DOC");
 
                     String option = reader.readLine();
 
 
                 switch (Integer.parseInt(option)) {
+                    case 0: {
+                        docHash = createDocument(dm, 1300, "Fault Tolerant Network Framework/target/Fault_Tolerant_Network_Framework-1.0-SNAPSHOT.jar");
+                        break;
+                    }
                     case 1: {
-                        docHash = createDocument(dm, MacAddress, 1300);
+                        docHash = createDocument(dm, 1300, "100MB.zip");
                         break;
                     }
                     case 2: {
-                        msgHash = createMessage(dm, MacAddress, 1300);
+                        msgHash = createMessage(dm, 1300);
                         break;
                     }
 
@@ -103,15 +109,17 @@ public class Main{
 
                     case 4: {
                         ChunkManager cm = dm.documents.get(docHash).cm;
-                        InetAddress destIP = InetAddress.getByName("2001:1::10");
-                        startSender(MacAddress, destIP,3333, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).getDocumentName());
+                        startSender(MacAddress,3333, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).getDocumentName());
                         break;
                     }
 
                     case 5:{
                         ChunkManager cm = dm.messages.get(msgHash);
-                        InetAddress destIP = InetAddress.getByName("192.168.0.10");
-                        startSender(MacAddress, destIP,3333, 1500, cm, cm.getCMMI(), null);
+                        startSender(MacAddress,3333, 1500, cm, cm.getCMMI(), null);
+                        break;
+                    }
+                    case 6:{
+                        mountFile(dm);
                         break;
                     }
                 }
@@ -143,28 +151,56 @@ public class Main{
     }
 
     private static void startMainListener(DataManager dm, int mtu){
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, 3333, mtu);
+        out.println("GIVE ME A IP TO LISTEN");
+        BufferedReader reader =
+                new BufferedReader(new InputStreamReader(System.in));
+        String ip = "";
+        try {
+            ip = reader.readLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu);
         Thread t = new Thread(mainListener);
 
         t.start();
     }
 
-    private static void startSender(String MacAddress, InetAddress destIP, int destPort, int mtu, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
+    private static void startSender(String MacAddress, int destPort, int mtu, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
+
+        out.println("GIVE ME A IP TO SEND");
+
+        BufferedReader reader =
+                new BufferedReader(new InputStreamReader(System.in));
+        String ip = "";
+        InetAddress destIP = null;
+        try {
+            ip = reader.readLine();
+             destIP = InetAddress.getByName(ip);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
         TransferMultiSender tms = new TransferMultiSender(MacAddress, destIP, destPort, 4444, mtu, cm, cmmi, docName, true);
         Thread t = new Thread(tms);
         t.start();
         
     }
 
-    private static String createMessage(DataManager dm, String macAddress, int maxPayloadSize) {
+    private static String createMessage(DataManager dm, int maxPayloadSize) {
         String hi = "hello world";
         byte[] info = hi.getBytes();
 
-        return dm.newMessage(macAddress, info, maxPayloadSize);
+        return dm.newMessage(info, maxPayloadSize);
     }
 
-    private static String createDocument(DataManager dm, String MacAddress, int maxPayloadSize) {
-        return dm.newDocument(MacAddress, (System.getProperty("user.home") + "/Desktop/"+"teste.pdf"), maxPayloadSize);
+    private static String createDocument(DataManager dm, int maxPayloadSize, String docName) {
+        //return dm.newDocument((System.getProperty("user.home") + "/Desktop/"), maxPayloadSize);
+        return dm.newDocument((System.getProperty("user.home") + "/Desktop/" + docName), maxPayloadSize);
+                //Fault Tolerant Network Framework/target/Fault_Tolerant_Network_Framework-1.0-SNAPSHOT.jar")" +
+
     }
 
     private static String createFTNFFolderStructure(String MacAddress) {
@@ -179,6 +215,26 @@ public class Main{
 
         out.println("CREATED FTNF");
         return ftnfpath;
+    }
+
+    private static void mountFile(DataManager dm){
+        out.println(dm.documents.keySet());
+
+        BufferedReader reader =
+                new BufferedReader(new InputStreamReader(System.in));
+        String choice = "";
+        int i = 0;
+        InetAddress destIP = null;
+        try {
+            choice = reader.readLine();
+            i = Integer.parseInt(choice) - 1;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        String docHash = new ArrayList<> (dm.documents.keySet()).get(i);
+        out.println("MOUNTING ON " + System.getProperty("user.home") + "/Desktop/");
+        dm.assembleDocument(docHash, System.getProperty("user.home") + "/Desktop/");
     }
 
     static void displayInterfaceInformation(NetworkInterface netint) throws SocketException {

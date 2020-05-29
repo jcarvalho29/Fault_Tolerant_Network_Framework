@@ -4,11 +4,12 @@ import Data.CompressedMissingChunksID;
 
 import java.io.Serializable;
 
-public class MissingChunksID implements Serializable {
+public class MissingChunkIDs implements Serializable {
     public int ID;
     public CompressedMissingChunksID cmcID;
-    public Byte DatagramsPerSecondPerSender;
-    public MissingChunksID(int ID, CompressedMissingChunksID cmcID, byte dpsps){
+    public int DatagramsPerSecondPerSender;
+
+    public MissingChunkIDs(int ID, CompressedMissingChunksID cmcID, int dpsps){
         this.ID = ID;
         this.cmcID = cmcID;
         this.DatagramsPerSecondPerSender = dpsps;

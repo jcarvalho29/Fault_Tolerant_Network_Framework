@@ -8,6 +8,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -24,7 +25,14 @@ public class FastUnicastListener implements Runnable {
 
     private boolean run;
 
+    private long firstReceivedCM;
+    private boolean frcmFlag;
+
     public FastUnicastListener(int MTU){
+
+        this.firstReceivedCM = 0;
+        this.frcmFlag = false;
+
         this.port = -1;
         this.MTU = MTU;
         boolean b = true;
@@ -48,13 +56,12 @@ public class FastUnicastListener implements Runnable {
     }
 
     public void kill(){
-        System.out.println("FAST LISTENER KILLED");
+        //System.out.println("FAST LISTENER KILLED");
         this.run = false;
         this.ds.close();
     }
 
     public void run() {
-
         try{
             byte[] buffer;
             DatagramPacket dp;
@@ -63,6 +70,12 @@ public class FastUnicastListener implements Runnable {
                 dp = new DatagramPacket(buffer, this.MTU);
 
                 this.ds.receive(dp);
+                if(!this.frcmFlag){
+                    this.frcmFlag = true;
+                    Date date = new Date();
+                    this.firstReceivedCM = date.getTime();
+                }
+
                 this.lock.lock();
                 this.bytes.add(dp.getData());
                 this.lock.unlock();
@@ -98,6 +111,19 @@ public class FastUnicastListener implements Runnable {
         return cPointer;
     }
 
+
+
+    public long getFirstCMReceivedTimestamp(){
+        if(this.frcmFlag)
+            return this.firstReceivedCM;
+        else
+            return Long.MAX_VALUE;
+    }
+
+    public void resetFirstCMReceivedTimestamp(){
+        this.frcmFlag = false;
+        this.firstReceivedCM = Long.MAX_VALUE;
+    }
     private byte[] getBytesFromObject(Object obj) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ObjectOutputStream out = null;

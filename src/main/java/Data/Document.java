@@ -12,7 +12,6 @@ import java.util.ArrayList;
 public class Document {
 
     private String Root;
-    private String MacAddress;
 
     private String documentName;
 
@@ -23,36 +22,32 @@ public class Document {
     * */
     private String localDocumentPath;
 
-    public Document(String Root, String MacAddress, String documentName, ChunkManager cm){
+    public Document(String Root, String documentName, ChunkManager cm){
         this.Root = Root;
-        this.MacAddress = MacAddress;
         this.documentName = documentName;
         this.cm = cm;
     }
-    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize, String hashAlgorithm){
+    public Document(String Root, String localDocumentPath, String DocumentName, int maxDatagramSize, String hashAlgorithm){
         this.Root = Root;
-        this.MacAddress = MacAddress;
         this.localDocumentPath = localDocumentPath;
         this.documentName = DocumentName;
 
         loadDocument(maxDatagramSize, hashAlgorithm);
     }
 
-    public Document(String Root, String MacAddress, String localDocumentPath, String DocumentName, int maxDatagramSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
+    public Document(String Root, String localDocumentPath, String DocumentName, int maxDatagramSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
         this.Root = Root;
-        this.MacAddress = MacAddress;
         this.localDocumentPath = localDocumentPath;
         this.documentName = DocumentName;
 
         loadDocument(maxDatagramSize, hashAlgorithm, maxChunksLoadedAtaTime);
     }
 
-    public Document(String Root, String MacAddress, String hash, int numberOfChunks, String DocumentName, String hashAlgorithm){
+    public Document(String Root, String hash, int numberOfChunks, String DocumentName, String hashAlgorithm){
         this.Root = Root;
-        this.MacAddress = MacAddress;
         this.documentName = DocumentName;
 
-        this.cm = new ChunkManager(this.Root, MacAddress, hash, hashAlgorithm, numberOfChunks);
+        this.cm = new ChunkManager(this.Root, hash, hashAlgorithm, numberOfChunks);
 
     }
 
@@ -69,7 +64,7 @@ public class Document {
             FileInputStream fis = new FileInputStream(this.localDocumentPath);
             byte[] info = new byte[Math.toIntExact(fileToLoad.length())];
             fis.read(info);
-            this.cm = new ChunkManager(this.Root, this.MacAddress, info, maxDatagramSize, hashAlgorithm);
+            this.cm = new ChunkManager(this.Root, info, maxDatagramSize, hashAlgorithm);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -77,7 +72,7 @@ public class Document {
     }
 
     private void loadDocument(int datagramMaxSize, String hashAlgorithm, int maxChunksLoadedAtaTime){
-        this.cm = new ChunkManager(this.Root, this.MacAddress, this.localDocumentPath, hashAlgorithm, datagramMaxSize,  maxChunksLoadedAtaTime);
+        this.cm = new ChunkManager(this.Root, this.localDocumentPath, hashAlgorithm, datagramMaxSize,  maxChunksLoadedAtaTime);
     }
 
     /*
@@ -92,7 +87,7 @@ public class Document {
      * */
     public void delete(){
         this.cm.eraseChunks();
-        File hashDocument = new File(this.Root + "/" + this.MacAddress + "/" + this.cm.getHash());
+        File hashDocument = new File(this.Root + "/" + this.cm.getHash());
 
         while(hashDocument.exists() && !hashDocument.delete());
     }
@@ -102,9 +97,11 @@ public class Document {
      *   String folder => Destination Folder within the Node Folder
      */
     public void writeDocumentToFolder(String folder){
-
-        String folderToWritePath = folderPathNormalizer(this.Root + folder) + this.documentName ;
-        String folderToReadPath = folderPathNormalizer(this.Root + this.MacAddress + "/" + this.cm.getHash()) + "/Chunks/";
+        System.out.println("ROOT => " + this.Root);
+        System.out.println("FOLDER => " + folder);
+        System.out.println("DOCNAME => " + this.documentName);
+        String folderToWritePath = folderPathNormalizer(folder) + this.documentName ;
+        String folderToReadPath = folderPathNormalizer(this.Root + "/" + this.cm.getHash()) + "/Chunks/";
 
         Chunk chunk;
         int i = 0;

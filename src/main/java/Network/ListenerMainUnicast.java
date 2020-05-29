@@ -6,6 +6,7 @@ import Messages.TransferMetaInfo;
 import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,29 +16,33 @@ public class ListenerMainUnicast implements Runnable{
     private boolean run = true;
 
     private DatagramSocket unicastSocket;
+    private String ip;
     private int unicastPort;
     private int MTU;
 
-    private HashMap<String, TransferReceiverManager> infoReceiverManager;
+    private HashMap<Integer, TransferReceiverManager> infoReceiverManager;
 
 
     private DataManager dm;
 
     private ArrayList<Integer> receivedIDs;
 
-    public ListenerMainUnicast(DataManager dm, int unicastPort, int MTU){
+    public ListenerMainUnicast(DataManager dm, String ip, int unicastPort, int MTU){
 
         this.dm = dm;
+        this.ip = ip;
         this.unicastPort = unicastPort;
         this.MTU = MTU;
 
         this.receivedIDs = new ArrayList<Integer>();
 
-        this.infoReceiverManager = new HashMap<String, TransferReceiverManager>();
+        this.infoReceiverManager = new HashMap<Integer, TransferReceiverManager>();
 
         try {
 
-            this.unicastSocket = new DatagramSocket(this.unicastPort);
+            this.unicastSocket = new DatagramSocket(null);
+            InetSocketAddress isa = new InetSocketAddress(this.ip, this.unicastPort);
+            this.unicastSocket.bind(isa);
         } catch (SocketException e) {
             e.printStackTrace();
         }
@@ -47,8 +52,12 @@ public class ListenerMainUnicast implements Runnable{
     public void kill(){
         this.run = false;
         this.unicastSocket.close();
-        for (String hash : this.infoReceiverManager.keySet())
-            this.infoReceiverManager.get(hash).kill();
+
+        for (Integer id : this.infoReceiverManager.keySet())
+            this.infoReceiverManager.get(id).kill();
+
+        this.infoReceiverManager.clear();
+        this.receivedIDs.clear();
     }
 
     private void processDatagramPacket(DatagramPacket dp){
@@ -59,33 +68,29 @@ public class ListenerMainUnicast implements Runnable{
             tmi = (TransferMetaInfo) obj;
 
             //MUDAR PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS
-            if (tmi != null) {
-                System.out.println("TMI NAO É NULO");
-                if(!this.receivedIDs.contains(tmi.ID)) {
-                    System.out.println("NAO RECEBI ESTE ID");
-                    this.receivedIDs.add(tmi.ID);
-                    if (!this.dm.hasChunkManager(tmi.cmmi.Hash)) {
-                        System.out.println("AIND NAO TENHO ESTE CM");
-                        if (tmi.DocumentName != null)
-                            this.dm.newDocument(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks, tmi.DocumentName);
-                        else
-                            this.dm.newMessage(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks);
 
-                        System.out.println("HERE");
-                    }
-                    //!!!!!!!!!!!!!!!!!!!!!!! TRATAR DO CASO EM QUE JÁ POSSUI O CM
+            if(!this.receivedIDs.contains(tmi.ID)) {
+                System.out.println("NAO RECEBI ESTE ID");
+                this.receivedIDs.add(tmi.ID);
 
-                    TransferReceiverManager trm = new TransferReceiverManager(this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 10);
-                    trm.startReceiverManager();
-                    System.out.println("TRM STARTED");
-                    this.infoReceiverManager.put(tmi.cmmi.Hash, trm);
+                if (!this.dm.hasChunkManager(tmi.cmmi.Hash)) {
+                    System.out.println("AINDA NAO TENHO ESTE CM");
+
+                    if (tmi.DocumentName != null)
+                        this.dm.newDocument(tmi.cmmi.Hash, tmi.cmmi.numberOfChunks, tmi.DocumentName);
+                    else
+                        this.dm.newMessage(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks);
                 }
-                else
-                    System.out.println("ALREADY HAVE THE ID");
+
+
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 10);
+                trm.startReceiverManager();
+                System.out.println("TRM STARTED");
+                this.infoReceiverManager.put(tmi.ID, trm);
             }
-            else {
-                System.out.println("TMI NULL ");
-            }
+            else
+                this.infoReceiverManager.get(tmi.ID).sendTransferMultiReceiverInfo();
+
     }
     public void run(){
         try {
@@ -98,7 +103,7 @@ public class ListenerMainUnicast implements Runnable{
                 this.unicastSocket.receive(dp);
 
                 processDatagramPacket(dp);
-                System.out.println("RECEIVED SOMETHING");
+                System.out.println("RECEIVED SOMETHING FROM " + dp.getAddress());
             }
 
         }
@@ -160,5 +165,10 @@ public class ListenerMainUnicast implements Runnable{
         }
 
         return o;
+    }
+
+    public void remove(int id) {
+        this.infoReceiverManager.remove(id);
+        this.receivedIDs.remove(new Integer(id));
     }
 }

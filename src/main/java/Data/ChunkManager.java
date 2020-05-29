@@ -16,17 +16,15 @@ public class ChunkManager {
     * These 3 parameters are used to construct a path where the Filechunks of the Information can be found
     */
     private String Root;
-    private String MacAddress;
 
     private ChunkManagerMetaInfo mi;
 
     /*
     * Creates a basic ChunkManager object that is used to initialize the class from a DocumentMetaInfo file
     * */
-    public ChunkManager(String Root, String MacAddress){
+    public ChunkManager(String Root){
         Root = folderPathNormalizer(Root);
         this.Root = Root;
-        this.MacAddress = MacAddress;
     }
 
     /*
@@ -37,7 +35,7 @@ public class ChunkManager {
     *   String hash => Hash of the File
     */
 
-    public ChunkManager (String root, String mac, String hash, String hashAlgorithm,  int numberOfChunks){
+    public ChunkManager (String root, String hash, String hashAlgorithm,  int numberOfChunks){
         root = folderPathNormalizer(root);
 
         String hashFolderPath = root + hash + "/";
@@ -51,7 +49,6 @@ public class ChunkManager {
         while((!chunksFolder.exists() && !chunksFolder.isDirectory()) && !chunksFolder.mkdir());
 
         this.Root = root;
-        this.MacAddress = mac;
 
         this.mi = new ChunkManagerMetaInfo();
 
@@ -79,11 +76,10 @@ public class ChunkManager {
      *   int datagramMaxSize => Maximum size a single datagram can take
      */
 
-    public ChunkManager (String root, String mac, byte[] info, int datagramMaxSize, String hashAlgorithm) {
+    public ChunkManager (String root, byte[] info, int datagramMaxSize, String hashAlgorithm) {
         root = folderPathNormalizer(root);
 
         this.Root = root;
-        this.MacAddress = mac;
 
         this.mi = new ChunkManagerMetaInfo();
 
@@ -97,7 +93,7 @@ public class ChunkManager {
         ArrayList <Chunk> chunks = createChunks(splitInfoIntoArrays(info), this.mi.numberOfChunks);
 
         this.mi.HashAlgoritm = hashAlgorithm;
-        this.mi.Hash = sha_256_Chunks(chunks, hashAlgorithm);
+        this.mi.Hash = hash_Chunks(chunks, hashAlgorithm);
 
         File hashFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
@@ -112,11 +108,10 @@ public class ChunkManager {
     * Constructor that creates a ChunkManager object. This Constructor will load a local file to
     * chunks and only have maxChunksLoadedAtaTime chunks in Ram at a time
     * */
-    public ChunkManager (String root, String mac, String localFilePath, String hashAlgorithm, int datagramMaxSize, int maxChunksLoadedAtaTime) {
+    public ChunkManager (String root, String localFilePath, String hashAlgorithm, int datagramMaxSize, int maxChunksLoadedAtaTime) {
         root = folderPathNormalizer(root);
 
         this.Root = root;
-        this.MacAddress = mac;
 
         this.mi = new ChunkManagerMetaInfo();
         this.mi.Hash = "TMPFILE";
@@ -380,7 +375,12 @@ public class ChunkManager {
         writeChunksToFolder(fcs, fcs.size());
 
         if(this.mi.numberOfChunksInArray == this.mi.numberOfChunks) {
-            this.mi.full = true;
+            if(checkAllChunksHash()) {
+                this.mi.full = true;
+                System.out.println("NO ERRORS WITH THE HASH");
+            }
+            else
+                System.out.println("SOME ERROR OCCORED");
         }
 
         updateDocumentMetaInfoFile();
@@ -685,7 +685,7 @@ public class ChunkManager {
     /*
     * Calculates the hash of the provided ArrayList<Chunk>
     * */
-    private String sha_256_Chunks(ArrayList<Chunk> chunks, String alg){
+    private String hash_Chunks(ArrayList<Chunk> chunks, String alg){
         Hash h = new Hash(alg);
 
         for(Chunk c : chunks) {
@@ -698,7 +698,7 @@ public class ChunkManager {
     /*
      * Calculates the hash of the provided ArrayList<byte[]>
      * */
-    private String sha_256_Bytes(ArrayList<byte[]> bytes, String alg){
+    private String hash_Bytes(ArrayList<byte[]> bytes, String alg){
         Hash h = new Hash(alg);
 
         for(byte[] b : bytes) {
@@ -712,16 +712,35 @@ public class ChunkManager {
      * Checks if the provided ArrayList<Chunk> hash matches the provided hash
      * */
     public boolean checkHash_Chunks(ArrayList<Chunk> chunks, String hash, String alg){
-        return hash.equals(sha_256_Chunks(chunks, alg));
+        return hash.equals(hash_Chunks(chunks, alg));
     }
 
     /*
      * Checks if the provided ArrayList<byte[]> hash matches the provided hash
      * */
     public boolean checkHash_Bytes(ArrayList<byte[]> bytes, String hash, String alg){
-        return hash.equals(sha_256_Bytes(bytes, alg));
+        return hash.equals(hash_Bytes(bytes, alg));
     }
 
+    public boolean checkAllChunksHash(){
+        Hash h = new Hash(this.mi.HashAlgoritm);
+
+        ArrayList<Chunk> chunks = new ArrayList<Chunk>();
+        String folderPath = this.Root + this.mi.Hash + "/Chunks/";
+        Path p;
+
+        for(int i = 0; i < this.mi.numberOfChunks; i++){
+            try {
+                p = Paths.get(folderPath + (i + Integer.MIN_VALUE) + ".chunk");
+                h.updateHash(Files.readAllBytes(p));
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return this.mi.Hash.equals(h.extractHash());
+    }
     /*
     * Deletes all Chunks that are saved in Memory as well the Data.DocumentMetaInfo File
     * */
