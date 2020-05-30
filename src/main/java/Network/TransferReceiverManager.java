@@ -127,8 +127,6 @@ public class TransferReceiverManager implements Runnable{
 
     private void createInitialDatagramPackets(){
 
-        ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.7));
-
         this. missingChunksIDS = new ArrayList<MissingChunkIDs>();
         MissingChunkIDs mcID;
 
@@ -136,6 +134,8 @@ public class TransferReceiverManager implements Runnable{
 
         for(int i = 0; i < this.fastListenersPorts.size(); i++)
             listenerPorts[i] = this.fastListenersPorts.get(i);
+
+        ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.7));
 
         if(cmcIDs == null) {
             System.out.println("Sending CMCID NULL");
@@ -249,7 +249,7 @@ public class TransferReceiverManager implements Runnable{
                     sendMissingChunkIDs();
                     System.out.println("SENT MISSING CHUNKS DUE TO TIMEOUT!! == 3");
                 }
-                if(this.consecutiveTimeouts%10 == 0) {
+                if(this.consecutiveTimeouts%12 == 0) {
                     sendMissingChunkIDs();
                     System.out.println("SENT MISSING CHUNKS DUE TO TIMEOUT!! %10");
                 }
@@ -437,9 +437,7 @@ public class TransferReceiverManager implements Runnable{
                 this.receivedDPDuringCycle += chunksReceived.size();
 
                 updateTimeoutStatus(true);
-                new Thread(() -> {
-                    this.dm.addChunks(this.tmi.cmmi.Hash, new ArrayList<Chunk>(chunksReceived));
-                }).start();
+                this.dm.addChunks(this.tmi.cmmi.Hash, new ArrayList<Chunk>(chunksReceived));
 
                 if (this.dm.isChunkManagerFull(this.tmi.cmmi.Hash)) {
                     this.FastReceiversSES.shutdownNow();

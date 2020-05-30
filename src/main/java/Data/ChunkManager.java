@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.apache.commons.io.FileUtils;
 
 
@@ -18,6 +20,8 @@ public class ChunkManager {
     private String Root;
 
     private ChunkManagerMetaInfo mi;
+    private ReentrantLock mi_Lock;
+
 
     /*
     * Creates a basic ChunkManager object that is used to initialize the class from a DocumentMetaInfo file
@@ -25,6 +29,7 @@ public class ChunkManager {
     public ChunkManager(String Root){
         Root = folderPathNormalizer(Root);
         this.Root = Root;
+        this.mi_Lock = new ReentrantLock();
     }
 
     /*
@@ -51,6 +56,7 @@ public class ChunkManager {
         this.Root = root;
 
         this.mi = new ChunkManagerMetaInfo();
+        this.mi_Lock = new ReentrantLock();
 
         this.mi.numberOfChunks = numberOfChunks;
         this.mi.numberOfChunksInArray = 0;
@@ -63,7 +69,6 @@ public class ChunkManager {
         int maxID = this.mi.numberOfChunks + Integer.MIN_VALUE;
         for(int i = Integer.MIN_VALUE; i < maxID; i++)
             this.mi.missingChunks.add(i);
-
 
         writeDocumentMetaInfoToFile();
     }
@@ -82,6 +87,7 @@ public class ChunkManager {
         this.Root = root;
 
         this.mi = new ChunkManagerMetaInfo();
+        this.mi_Lock = new ReentrantLock();
 
 
         this.mi.datagramMaxSize = datagramMaxSize;
@@ -98,7 +104,7 @@ public class ChunkManager {
         File hashFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
 
-        writeChunksToFolder(chunks, this.mi.numberOfChunks);
+        writeChunksToFolder(chunks);
         this.mi.full = true;
 
         writeDocumentMetaInfoToFile();
@@ -115,6 +121,7 @@ public class ChunkManager {
 
         this.mi = new ChunkManagerMetaInfo();
         this.mi.Hash = "TMPFILE";
+        this.mi_Lock = new ReentrantLock();
         this.mi.HashAlgoritm = hashAlgorithm;
 
         File tempFolder = new File(this.Root + "/" + this.mi.Hash + "/");
@@ -170,7 +177,9 @@ public class ChunkManager {
         try {
             fileOut = new FileOutputStream(documentMetaInfoFilePath);
             ObjectOutputStream objectOut = new ObjectOutputStream(fileOut);
+            this.mi_Lock.lock();
             objectOut.writeObject(this.mi);
+            this.mi_Lock.unlock();
             objectOut.close();
 
         } catch (IOException e) {
@@ -248,7 +257,7 @@ public class ChunkManager {
                     info.add(buffer);
                 }
                 Chunks = createChunks(info, i);
-                writeChunksToFolder(Chunks, info.size());
+                writeChunksToFolder(Chunks);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -286,8 +295,10 @@ public class ChunkManager {
     *   FileChunk[] fcs => Array of FileChunks to be written
     *   int size => Size of the FileChunk Array
     */
-    private void writeChunksToFolder(ArrayList <Chunk> fcs, int size){
+    private void writeChunksToFolder(ArrayList <Chunk> fcs){
         int i;
+        int size = fcs.size();
+
         String folderPath = this.Root + this.mi.Hash + "/Chunks/";
         File ficheiro = new File(folderPath);
         File filePointer;
@@ -299,16 +310,16 @@ public class ChunkManager {
         for(i = 0; i < size; i++){
             try {
                 Chunk fc = fcs.get(i);
-                path = folderPath + fc.getPlace() + ".chunk";
+                path = folderPath + fc.place + ".chunk";
                 filePointer = new File(path);
 
                 //SO VAI ESCREVER O FICHEIRO SE ELE NAO EXISTIR
                 if(!filePointer.exists()) {
                     file = Paths.get(path);
-                    Files.write(file, fc.getChunk());
+                    Files.write(file, fc.Chunk);
                 }
                 else
-                    System.out.println("REPEATED CHUNK" + fc.getPlace());
+                    System.out.println("REPEATED CHUNK" + fc.place);
             }
                 catch (Exception e) {
                 e.printStackTrace();
@@ -361,31 +372,71 @@ public class ChunkManager {
     * calls writeFileChunksToFolder to write the new Filechunks, and updates the MetaInfo File
     *   ArrayList<FileChunk> fcs => Newly received Filechunks to be written
     */
-    public boolean addChunks (ArrayList<Chunk> fcs){
-        //!!!!!!!!!!!!!NOTIFY!!?!?!??!??!?
-        //System.out.println("IN CHUNK MANAGER");
-        for(Chunk fc: fcs) {
-            //System.out.println("ID!!! => " + fc.getPlace());
-            if(this.mi.missingChunks.contains(fc.getPlace())) {
-                this.mi.missingChunks.remove(new Integer(fc.getPlace()));
-                this.mi.numberOfChunksInArray++;
-                this.mi.chunksSize += fc.getChunk().length;
-            }
+    public boolean addChunks (ArrayList<Chunk> chunks){
+
+
+        this.mi_Lock.lock();
+        long startTime = System.currentTimeMillis();
+
+        if(this.mi.missingChunks.size() > chunks.size()) {
+            ArrayList<Chunk> chunksCopy = new ArrayList<Chunk>(chunks);
+            new Thread(() -> {
+                for (Chunk c : chunksCopy) {
+                    //System.out.println("ID!!! => " + fc.getPlace());
+                    this.mi_Lock.lock();
+                    if (this.mi.missingChunks.contains(c.place)) {
+                        //this.mi.missingChunks.remove(new Integer(c.getPlace()));
+                        this.mi.missingChunks.remove((Object) c.place);
+                        this.mi.numberOfChunksInArray++;
+                        this.mi.chunksSize += c.Chunk.length;
+                    }
+                    this.mi_Lock.unlock();
+                }
+
+                this.mi_Lock.lock();
+                if (this.mi.numberOfChunksInArray == this.mi.numberOfChunks) {
+                    this.mi.full = true;
+                }
+                this.mi_Lock.unlock();
+
+                updateDocumentMetaInfoFile();
+            }).start();
+
         }
+        else{
+            for (Chunk c : chunks) {
+                //System.out.println("ID!!! => " + fc.getPlace());
+                if (this.mi.missingChunks.contains(c.place)) {
+                    //this.mi.missingChunks.remove(new Integer(c.getPlace()));
+                    this.mi.missingChunks.remove((Object) c.place);
+                    this.mi.numberOfChunksInArray++;
+                    this.mi.chunksSize += c.Chunk.length;
+                }
+            }
 
-        writeChunksToFolder(fcs, fcs.size());
-
-        if(this.mi.numberOfChunksInArray == this.mi.numberOfChunks) {
-            if(checkAllChunksHash()) {
+            if (this.mi.numberOfChunksInArray == this.mi.numberOfChunks) {
                 this.mi.full = true;
-                System.out.println("NO ERRORS WITH THE HASH");
             }
-            else
-                System.out.println("SOME ERROR OCCORED");
+
+            updateDocumentMetaInfoFile();
         }
 
-        updateDocumentMetaInfoFile();
+        long endTime = System.currentTimeMillis();
+        this.mi_Lock.unlock();
 
+        //System.out.println("SPENT " + (endTime - startTime) + " ms MESSING WITH CHUNKMANAGER META INFO (" + chunks.size() + "Chunks )");
+
+        new Thread(() ->{
+            //System.out.println("            Inside Writing THREAD");
+
+            long beforeWriting = System.currentTimeMillis();
+            writeChunksToFolder(chunks);
+            long afterWriting = System.currentTimeMillis();
+
+            //System.out.println("            TIME SPENT WRITTING " + (afterWriting - beforeWriting) + " ms ( " + chunks.size() + " Chunks )");
+        }).start();
+
+        //System.out.println("END OF ADD CHUNKS");
         return this.mi.full;
     }
 
@@ -690,7 +741,7 @@ public class ChunkManager {
         Hash h = new Hash(alg);
 
         for(Chunk c : chunks) {
-            h.updateHash(c.getChunk());
+            h.updateHash(c.Chunk);
         }
 
         return h.extractHash();

@@ -213,7 +213,7 @@ public class DataManager {
     public void newDocument(String hash, int numberOfChunks, String documentName) {
 
         if(!this.dmMI.cmHashs.contains(hash)) {
-            System.out.println("ITS NEW DOCUMENT");
+            System.out.println("ITS A NEW DOCUMENT");
             Document f = new Document(this.dmMI.Root, hash, numberOfChunks, documentName, "SHA-256");
 
             registerHash(hash);
