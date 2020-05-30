@@ -11,10 +11,8 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class TransferReceiverManager implements Runnable{
     private ListenerMainUnicast mainListener;
@@ -191,30 +189,26 @@ public class TransferReceiverManager implements Runnable{
 
     private void updateCycleStats(){
 
-        long min = Long.MAX_VALUE;
-        long timestamp;
-        for(FastUnicastListener fus : this.fastListeners){
-            timestamp = fus.getFirstCMReceivedTimestamp();
+        if(this.stats.getNumberOfTransferCycles() > 1) {
+            long min = Long.MAX_VALUE;
+            long timestamp;
+            for (FastUnicastListener fus : this.fastListeners) {
+                timestamp = fus.getFirstCMReceivedTimestamp();
+                fus.resetFirstCMReceivedTimestamp();
 
-            if(timestamp < min)
-                min = timestamp;
+                if (timestamp < min) {
+                    min = timestamp;
+                }
 
-            fus.resetFirstCMReceivedTimestamp();
-        }
-
-        if(this.stats.getNumberOfTransferCycles() == 0){
-            System.out.println("                FIRST CYCLE");
-
-            this.stats.setFirstChunkReceivedTime(min);
-            this.stats.setTransferCycleBeginning(min);
-            System.out.println();
-        }
-        else{
+            }
             System.out.println("                NOT THE CYCLE");
 
-            this.stats.markFirstRetransmittedMCReceivedTime(min);
+            this.stats.markFirstRetransmittedCMReceivedTime(min);
         }
-
+        else{
+            for(FastUnicastListener fus : this.fastListeners)
+                fus.resetFirstCMReceivedTimestamp();
+        }
 
         //System.out.println("Marked cycle end");
         this.stats.registerDPReceivedInCycle(this.receivedDPDuringCycle);
@@ -230,7 +224,7 @@ public class TransferReceiverManager implements Runnable{
         }
 
         this.stats.markTransferCycleEnding();
-        this.stats.markTransferCycleBeginning(); // falta adicionar isto ao 1 ciclo
+        this.stats.markTransferCycleBeginning();
         //System.out.println("Cycle Stats updated");
     }
 
@@ -414,6 +408,7 @@ public class TransferReceiverManager implements Runnable{
         long cycleStart;
         long cycleEnd;
         int tmri_Dropped = 0;
+        boolean isFirstCycle = true;
 
         while(this.run) {
             cycleStart = System.currentTimeMillis();
@@ -433,6 +428,18 @@ public class TransferReceiverManager implements Runnable{
 
             if (chunksReceived.size() > 0) {
 
+                if(isFirstCycle){
+                    isFirstCycle = false;
+                    long min = Long.MAX_VALUE;
+                    long receiveTime;
+                    for(FastUnicastListener fus : this.fastListeners){
+                        receiveTime = fus.getFirstCMReceivedTimestamp();
+                        if (min > receiveTime)
+                            min = receiveTime;
+                    }
+                    this.stats.setFirstChunkReceivedTime(min);
+                    this.stats.setTransferCycleBeginning(min);
+                }
                 this.TransferMultiReceiverInfoReceived = true;
                 this.receivedDPDuringCycle += chunksReceived.size();
 

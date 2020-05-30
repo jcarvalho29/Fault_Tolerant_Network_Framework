@@ -107,14 +107,15 @@ public class ReceiverStats {
     }
 
     public void markMCIDsSendTime(){
+        long time = System.currentTimeMillis();
         if(this.MCIDsSendTime.size() == this.firstRetransmittedCMReceiveTime.size() + 1){
             this.MCIDsSendTime.remove(this.MCIDsSendTime.size()-1);
         }
+        this.MCIDsSendTime.add(time);
 
-        this.MCIDsSendTime.add(System.currentTimeMillis());
     }
 
-    public void markFirstRetransmittedMCReceivedTime(long time){
+    public void markFirstRetransmittedCMReceivedTime(long time){
         this.firstRetransmittedCMReceiveTime.add(time);
         calculateRetransmissionRTT();
     }

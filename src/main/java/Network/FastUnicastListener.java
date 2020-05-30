@@ -8,7 +8,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -30,7 +29,7 @@ public class FastUnicastListener implements Runnable {
 
     public FastUnicastListener(int MTU){
 
-        this.firstReceivedCM = 0;
+        this.firstReceivedCM = Long.MAX_VALUE;
         this.frcmFlag = false;
 
         this.port = -1;
@@ -113,8 +112,10 @@ public class FastUnicastListener implements Runnable {
 
 
     public long getFirstCMReceivedTimestamp(){
-        if(this.frcmFlag)
+        if(this.frcmFlag) {
+            frcmFlag = false;
             return this.firstReceivedCM;
+        }
         else
             return Long.MAX_VALUE;
     }
