@@ -411,10 +411,13 @@ public class TransferReceiverManager implements Runnable{
     @Override
     public void run() {
 
-        while(this.run) {
-            Date cycleStart = new Date();
+        long cycleStart;
+        long cycleEnd;
+        int tmri_Dropped = 0;
 
-            int tmri_Dropped = 0;
+        while(this.run) {
+            cycleStart = System.currentTimeMillis();
+
 
             ArrayList<Chunk> chunksReceived = new ArrayList<Chunk>();
             ArrayList<ChunkMessage> chunkHeaders;
@@ -434,7 +437,9 @@ public class TransferReceiverManager implements Runnable{
                 this.receivedDPDuringCycle += chunksReceived.size();
 
                 updateTimeoutStatus(true);
-                this.dm.addChunks(this.tmi.cmmi.Hash, chunksReceived);
+                new Thread(() -> {
+                    this.dm.addChunks(this.tmi.cmmi.Hash, new ArrayList<Chunk>(chunksReceived));
+                }).start();
 
                 if (this.dm.isChunkManagerFull(this.tmi.cmmi.Hash)) {
                     this.FastReceiversSES.shutdownNow();
@@ -459,9 +464,9 @@ public class TransferReceiverManager implements Runnable{
                 }
             }
 
-            Date cycleEnd = new Date();
+            cycleEnd = System.currentTimeMillis();
 
-            int cycleExecTime = (int) (cycleEnd.getTime() - cycleStart.getTime());
+            int cycleExecTime = (int) (cycleEnd - cycleStart);
             int sleepTime = getSleepTime(cycleExecTime);
             try {
                 System.out.println("SLEEP FOR 3*" + sleepTime);

@@ -78,28 +78,23 @@ public class ReceiverStats {
     }
 
     public void markProtocolStartTime(){
-        Date date = new Date();
-        this.protocolStartTime = date.getTime();
+        this.protocolStartTime = System.currentTimeMillis();
     }
 
     public void markProtocolEndTime(){
-        Date date = new Date();
-        this.protocolEndTime = date.getTime();
+        this.protocolEndTime = System.currentTimeMillis();
     }
 
     public void markTransferStartTime(){
-        Date date = new Date();
-        this.transferStartTime = date.getTime();
+        this.transferStartTime = System.currentTimeMillis();
     }
 
     public void markTransferEndTime(){
-        Date date = new Date();
-        this.transferEndTime = date.getTime();
+        this.transferEndTime = System.currentTimeMillis();
     }
 
     public void markTrmiSendTime(){
-        Date date = new Date();
-        this.trmiSendTime = date.getTime();
+        this.trmiSendTime = System.currentTimeMillis();
     }
 
     public void setFirstChunkReceivedTime(long timestamp){
@@ -112,12 +107,11 @@ public class ReceiverStats {
     }
 
     public void markMCIDsSendTime(){
-        Date date = new Date();
         if(this.MCIDsSendTime.size() == this.firstRetransmittedCMReceiveTime.size() + 1){
             this.MCIDsSendTime.remove(this.MCIDsSendTime.size()-1);
         }
 
-        this.MCIDsSendTime.add(date.getTime());
+        this.MCIDsSendTime.add(System.currentTimeMillis());
     }
 
     public void markFirstRetransmittedMCReceivedTime(long time){
@@ -193,8 +187,7 @@ public class ReceiverStats {
     }
 
     public void markTransferCycleBeginning(){
-        Date date = new Date();
-        this.transferCycleStartTime.add(date.getTime());
+        this.transferCycleStartTime.add(System.currentTimeMillis());
     }
 
     public void setTransferCycleBeginning(long timestamp){
@@ -203,8 +196,7 @@ public class ReceiverStats {
 
     public void markTransferCycleEnding(){
 
-        Date date = new Date();
-        long time = date.getTime();
+        long time = System.currentTimeMillis();
         //System.out.println(this.transferCycleStartTime);
         int duration =(int) (time - this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1));
         //System.out.println(time + " - " + this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1) + " = " + duration);
@@ -217,10 +209,9 @@ public class ReceiverStats {
     }
 
     public float bytesPerSecondProtocol(){
-        Date date = new Date();
         float percent;
         if(this.protocolEndTime == 0)
-            percent = (float)this.bytesReceived / (float)(date.getTime() - this.protocolStartTime);
+            percent = (float)this.bytesReceived / (float)(System.currentTimeMillis() - this.protocolStartTime);
         else
             if((this.protocolEndTime - this.protocolStartTime) == 0)
                 percent = (float)(this.bytesReceived);
@@ -231,10 +222,10 @@ public class ReceiverStats {
     }
 
     public float bytesPerSecondTransfer(){
-        Date date = new Date();
         float percent;
+
         if(this.transferEndTime == 0)
-            percent = (float)this.bytesReceived / (float)(date.getTime() - this.transferStartTime);
+            percent = (float)this.bytesReceived / (float)(System.currentTimeMillis() - this.transferStartTime);
         else
             if((this.transferEndTime - this.transferStartTime) == 0)
                 percent = (float)(this.bytesReceived);

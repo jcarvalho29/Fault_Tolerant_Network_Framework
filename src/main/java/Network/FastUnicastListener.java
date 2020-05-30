@@ -72,8 +72,7 @@ public class FastUnicastListener implements Runnable {
                 this.ds.receive(dp);
                 if(!this.frcmFlag){
                     this.frcmFlag = true;
-                    Date date = new Date();
-                    this.firstReceivedCM = date.getTime();
+                    this.firstReceivedCM = System.currentTimeMillis();
                 }
 
                 this.lock.lock();

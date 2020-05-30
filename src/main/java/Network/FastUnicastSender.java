@@ -116,7 +116,7 @@ public class FastUnicastSender implements Runnable{
         this.ChunkArrays_lock.unlock();
 
         int cycleExecTime;
-        Date cycleStart = new Date(), cycleEnd;
+        Long cycleStart = System.currentTimeMillis(), cycleEnd;
         int burst = 0;
         Random rand = new Random();
         this.isRunning_lock.lock();
@@ -128,8 +128,8 @@ public class FastUnicastSender implements Runnable{
 
                     sendFileChunk(this.cToSend.get(0));
 
-                    cycleEnd = new Date();
-                    cycleExecTime = (int) (cycleEnd.getTime() - cycleStart.getTime());
+                    cycleEnd = System.currentTimeMillis();
+                    cycleExecTime = (int) (cycleEnd - cycleStart);
 
                     this.dpsLock.lock();
                     int dps = this.dpPS;
@@ -146,7 +146,7 @@ public class FastUnicastSender implements Runnable{
                             Thread.sleep((1000 / dps) - cycleExecTime);
                     }
 
-                    cycleStart = new Date();
+                    cycleStart = System.currentTimeMillis();
                     this.cToSend.remove(0);
                 }
 
