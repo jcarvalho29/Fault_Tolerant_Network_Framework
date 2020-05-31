@@ -21,7 +21,8 @@ public class ChunkManagerMetaInfo implements Serializable {
         this.numberOfChunksInArray = mi.numberOfChunksInArray;
         this.chunksSize = mi.chunksSize;
         this.full = mi.full;
-        this.missingChunks = (ArrayList<Integer>) mi.missingChunks.clone();
+        if(mi.missingChunks != null)
+            this.missingChunks = new ArrayList<Integer>(mi.missingChunks);
         this.Hash = mi.Hash;
         this.HashAlgoritm = mi.HashAlgoritm;
     };

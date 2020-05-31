@@ -179,7 +179,7 @@ public class TransferReceiverManager implements Runnable{
                 data = getBytesFromObject(mcid);
                 dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
                 this.unicastSocket.send(dp);
-                Thread.sleep(100);
+                Thread.sleep(5);
             }
             catch (IOException | InterruptedException e) {
                 e.printStackTrace();
@@ -393,10 +393,10 @@ public class TransferReceiverManager implements Runnable{
                 sleepTime = 500 - cycleExecTime;
         }
         else {
-            if(rtt > 150 && cycleExecTime < rtt)
+            if(rtt > 50 && cycleExecTime < rtt)
                 sleepTime = rtt - cycleExecTime;
             else
-                sleepTime = 150;
+                sleepTime = 50;
         }
 
         return sleepTime;
