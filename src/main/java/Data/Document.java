@@ -78,8 +78,8 @@ public class Document {
     /*
      * Given an ArrayList of chunks, this function uses the Data.ChunkManager object to write them to Root/MacAddress/hash/chunks folder
      * */
-    public void addChunks(ArrayList<Chunk> chunks){
-        this.cm.addChunks(chunks);
+    public boolean addChunks(ArrayList<Chunk> chunks){
+        return this.cm.addChunks(chunks);
     }
 
     /*

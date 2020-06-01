@@ -21,7 +21,6 @@ public class ChunkManager {
 
     private ChunkManagerMetaInfo mi;
     private ReentrantLock mi_Lock;
-    private boolean[] missingChunks;
     private ReentrantLock missingChunks_Lock;
 
     /*
@@ -60,27 +59,18 @@ public class ChunkManager {
         this.mi_Lock = new ReentrantLock();
 
         this.mi.numberOfChunks = numberOfChunks;
-        this.missingChunks = new boolean[numberOfChunks];
         this.mi.numberOfChunksInArray = 0;
         this.mi.chunksSize = 0;
         this.mi.full = false;
         this.mi.Hash = hash;
         this.mi.HashAlgoritm = hashAlgorithm;
 
-        this.mi.missingChunks = new ArrayList<Integer>();
-        int maxID = this.mi.numberOfChunks + Integer.MIN_VALUE;
-
-        for(int i = Integer.MIN_VALUE; i < maxID; i++)
-            this.mi.missingChunks.add(i);
-
-        /*for(int i = 0; i < numberOfChunks; i++)
-            this.missingChunks[i] = true;*/
-
         this.missingChunks_Lock = new ReentrantLock();
-        this.missingChunks[0] = true;
+        this.mi.missingChunks = new boolean[numberOfChunks];
+        this.mi.missingChunks[0] = true;
 
         for (int i = 1; i < numberOfChunks; i += i) {
-            System.arraycopy(this.missingChunks, 0, this.missingChunks, i, ((numberOfChunks - i) < i) ? (numberOfChunks - i) : i);
+            System.arraycopy(this.mi.missingChunks, 0, this.mi.missingChunks, i, Math.min((numberOfChunks - i), i));
         }
 
         writeDocumentMetaInfoToFile();
@@ -420,14 +410,23 @@ public class ChunkManager {
     public boolean addChunks (ArrayList<Chunk> chunks){
 
         int chunk_size = chunks.size();
+        int totalNumberOfChunks = this.mi.numberOfChunks;
 
-        this.mi_Lock.lock();
-        if(this.mi.missingChunks.size() > chunk_size) {
+        //DEBUG!!!!!!!!!!!!!!!!!!
+        if(chunk_size == 0){
+            System.out.println("            SAY WHATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
+            try {
+                Thread.sleep(10000000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
 
-            ArrayList<Chunk> chunksCopy = new ArrayList<Chunk>(chunks);
+        /*if(numberOfMissingChunks > chunk_size) {
+
 
             new Thread(() -> {
-                long startTime = System.currentTimeMillis();
+                //long startTime = System.currentTimeMillis();
 
                 boolean[] missingc = new boolean[this.mi.numberOfChunks];
                 missingc[0] = true;
@@ -437,25 +436,23 @@ public class ChunkManager {
                 }
 
                 for (Chunk c : chunksCopy) {
-                    //System.out.println("ID!!! => " + fc.getPlace());
                     this.mi_Lock.lock();
-                    //if (this.mi.missingChunks.contains(c.place)) {
-                    //this.mi.missingChunks.remove((Object) c.place);
+
                     missingc[c.place - Integer.MIN_VALUE] = false;
                     this.mi.numberOfChunksInArray++;
                     this.mi.chunksSize += c.Chunk.length;
-                    //}
+
                     this.mi_Lock.unlock();
                 }
 
                 this.missingChunks_Lock.lock();
                 for(int i = 0; i < this.mi.numberOfChunks; i++)
-                    this.missingChunks[i] = this.missingChunks[i] & missingc[i];
+                    this.mi.missingChunks[i] = this.mi.missingChunks[i] & missingc[i];
                 this.missingChunks_Lock.unlock();
 
-                long endTime = System.currentTimeMillis();
+                //long endTime = System.currentTimeMillis();
 
-                System.out.println("SPENT " + (endTime - startTime) + " ms UPDATING THE METAINFO (" + chunks.size() + "Chunks )");
+                //System.out.println("SPENT " + (endTime - startTime) + " ms UPDATING THE METAINFO (" + chunks.size() + "Chunks )");
                 this.mi_Lock.lock();
                 if (this.mi.numberOfChunksInArray == this.mi.numberOfChunks) {
                     this.mi.full = true;
@@ -466,40 +463,34 @@ public class ChunkManager {
             }).start();
 
         }
-        else{
+        else{*/
 
-            boolean[] missingc = new boolean[this.mi.numberOfChunks];
-            missingc[0] = true;
+        boolean[] missingc = new boolean[totalNumberOfChunks];
+        missingc[0] = true;
 
-            for (int i = 1; i < this.mi.numberOfChunks; i += i) {
-                System.arraycopy(missingc, 0, missingc, i, ((this.mi.numberOfChunks - i) < i) ? (this.mi.numberOfChunks - i) : i);
-            }
+        for (int i = 1; i < totalNumberOfChunks; i += i)
+            System.arraycopy(missingc, 0, missingc, i, Math.min((totalNumberOfChunks - i), i));
 
+        this.mi_Lock.lock();
             for (Chunk c : chunks) {
-                //System.out.println("ID!!! => " + fc.getPlace());
-                //if (this.mi.missingChunks.contains(c.place)) {
-                //this.mi.missingChunks.remove(new Integer(c.getPlace()));
-                //this.mi.missingChunks.remove((Object) c.place);
                 missingc[c.place - Integer.MIN_VALUE] = false;
                 this.mi.numberOfChunksInArray++;
                 this.mi.chunksSize += c.Chunk.length;
-                //}
             }
+        this.mi_Lock.unlock();
 
-            this.missingChunks_Lock.lock();
-            for(int i = 0; i < this.mi.numberOfChunks; i++)
-                this.missingChunks[i] = this.missingChunks[i] & missingc[i];
-            this.missingChunks_Lock.unlock();
+        this.missingChunks_Lock.lock();
+            for(int i = 0; i < totalNumberOfChunks; i++)
+                this.mi.missingChunks[i] = this.mi.missingChunks[i] & missingc[i];
+        this.missingChunks_Lock.unlock();
 
-            if (this.mi.numberOfChunksInArray == this.mi.numberOfChunks) {
-                this.mi.full = true;
-            }
-
-            updateDocumentMetaInfoFile();
-        }
+        this.mi_Lock.lock();
+            if (this.mi.numberOfChunksInArray == totalNumberOfChunks)
+                    this.mi.full = true;
 
         this.mi_Lock.unlock();
 
+        updateDocumentMetaInfoFile();
 
         new Thread(() ->{
             //System.out.println("            Inside Writing THREAD");
@@ -511,7 +502,6 @@ public class ChunkManager {
             //System.out.println("            TIME SPENT WRITTING " + (afterWriting - beforeWriting) + " ms ( " + chunks.size() + " Chunks )");
         }).start();
 
-        //System.out.println("END OF ADD CHUNKS");
         return this.mi.full;
     }
 
@@ -593,37 +583,55 @@ public class ChunkManager {
     /*
     * Retrieves the IDs of the Missing Filechunks. These Filechunks are the ones that haven't been sent or haven't been received yet.
     */
-    public ArrayList<Integer> getMissingChunksIDs(){
-        return new ArrayList<Integer>(this.mi.missingChunks);
+    public boolean[] getMissingChunksIDs(){
+        boolean[] res = new boolean[this.mi.numberOfChunks];
+
+        System.arraycopy(this.mi.missingChunks, 0, res, 0, this.mi.numberOfChunks);
+
+        return res;
     }
 
 
     public ArrayList<CompressedMissingChunksID> getCompressedMissingChunksID(int maxSize){
-        ArrayList<Integer> missingChunks;
+        int totalNumberOfChunks = this.mi.numberOfChunks;
+        boolean [] missingChunks = new boolean[totalNumberOfChunks];
+
         ArrayList<CompressedMissingChunksID> res = new ArrayList<CompressedMissingChunksID>();
 
         int actualMaxSize = maxSize+1;
 
+        int numberOfMissingChunks = 0;
+
         this.missingChunks_Lock.lock();
-        for(int i = this.mi.numberOfChunks-1; i >= 0; i--){
-            if(!this.missingChunks[i])
-                this.mi.missingChunks.remove((Object) (i + Integer.MIN_VALUE));
-        }
+
+            for(boolean val : this.mi.missingChunks)
+                if(val){
+                    numberOfMissingChunks++;
+                }
         this.missingChunks_Lock.unlock();
 
-        if(this.mi.missingChunks.size() == this.mi.numberOfChunks)
+        if(numberOfMissingChunks == totalNumberOfChunks)
             res = null;
         else{
             int sizeParam = 4 * maxSize;
 
             while(res.size() != 1 && (actualMaxSize > maxSize || actualMaxSize < maxSize*0.9)) {
                 res.clear();
-                missingChunks = new ArrayList<Integer>(this.mi.missingChunks);
 
-                while (missingChunks.size() > 0) {
-                    System.out.println("A Processar Compressed MissingChunks " + missingChunks.size() + " left ( MAX SIZE: " + maxSize + " )");
+                //COPY
+                System.arraycopy(this.mi.missingChunks, 0, missingChunks, 0, totalNumberOfChunks);
+
+                int nmc = numberOfMissingChunks;
+
+                while (nmc > 0) {
+                    System.out.println("A Processar Compressed MissingChunks " + nmc + " left ( MAX SIZE: " + maxSize + " )");
                     CompressedMissingChunksID cmcID = getCompressedMissingChunksID(missingChunks, sizeParam);
                     res.add(cmcID);
+
+                    nmc = 0;
+                    for (boolean val : missingChunks)
+                        if(val)
+                            nmc++;
                 }
                 actualMaxSize = maxSize(res);
 
@@ -635,6 +643,21 @@ public class ChunkManager {
                     if (actualMaxSize < maxSize * 0.9) {
                         sizeParam = (int) (sizeParam * 1.05);
                         System.out.println("DEMASIADO PEQUENO " + actualMaxSize + " vs " + maxSize);
+                        //DEBUG!!!!!!!!!!!!!!!!!!!!!!!!
+                        if(actualMaxSize == Integer.MIN_VALUE){
+                            System.out.println("RES SIZE = " + res.size());
+                            System.out.println("THIS.MISSING CHUNKS " + this.mi.missingChunks);
+                            System.out.println("MISSING CHUNKS " + missingChunks);
+                            System.out.println("NMC " + nmc);
+                            System.out.println("RES VALUES");
+                            for (CompressedMissingChunksID c : res)
+                                System.out.println(getIDsFromCompressedMissingChunksID(c));
+                            try {
+                                Thread.sleep(10000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        }
                     }
                 }
             }
@@ -647,7 +670,7 @@ public class ChunkManager {
 
     private int maxSize (ArrayList <CompressedMissingChunksID> cmcIDs){
         byte[] sizeTester;
-        int maxSize = 0;
+        int maxSize = Integer.MIN_VALUE;
 
         for(CompressedMissingChunksID cmcid : cmcIDs){
             sizeTester = getBytesFromObject(cmcid);
@@ -684,46 +707,61 @@ public class ChunkManager {
         return data;
     }
 
-    private CompressedMissingChunksID getCompressedMissingChunksID(ArrayList<Integer> missingChunks, int maxSize){
+    private CompressedMissingChunksID getCompressedMissingChunksID(boolean[] missingChunks, int maxSize){
 
         //System.out.println(mfcGroup);
+        int totalNumberOfChunks = this.mi.numberOfChunks;
+        //ArrayList<Integer> mfcGroup = missingChunks;
+        int mcPointer = 0;
+        int referenceID = 0;
+        int currentID = 0;
 
-        ArrayList<Integer> mfcGroup = missingChunks;
+        for(int i = 0; i < totalNumberOfChunks && mcPointer == 0; i++)
+            if(missingChunks[i]){
+                missingChunks[i] = false;
+                mcPointer = i+1;
+                referenceID = i + Integer.MIN_VALUE;
+                currentID = referenceID;
+            }
 
-        int referenceID = mfcGroup.get(0);
-        int currentID = referenceID;
         int currentSize = Integer.SIZE;
-        int counter = 0;
 
         ArrayList<Boolean> toAdd = new ArrayList<Boolean>();
 
         ArrayList<Byte> inc = new ArrayList<Byte>();
 
-        mfcGroup.remove(0);
-
         int dif = Byte.MAX_VALUE - Byte.MIN_VALUE;
-       // System.out.println("CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
-        while (currentSize < maxSize &&  mfcGroup.size() > 0) {
+        int nextID;
+        // System.out.println("CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
+        while (currentSize < maxSize &&  mcPointer < totalNumberOfChunks) {
             //System.out.println("    CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize + "\n i " + i + " mfc.size " + mfcGroup.size());
-            int id = mfcGroup.get(0);
-            mfcGroup.remove(0);
-            //System.out.println(currentID + " + " + dif + " < " + id + " " + mfcGroup.isEmpty());
-            while (currentID + dif < id) {
-                //System.out.println("        CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
-                toAdd.add(false);
-                currentID += dif;
-                currentSize += 1;
+            nextID = 0;
+            while (mcPointer < totalNumberOfChunks && nextID == 0) {
+                if (missingChunks[mcPointer]) {
+                    missingChunks[mcPointer] = false;
+                    nextID = mcPointer + Integer.MIN_VALUE;
+                }
+                mcPointer++;
             }
 
-            toAdd.add(true);
-            currentSize +=1;
+            if (nextID != 0) {
+                //System.out.println(currentID + " + " + dif + " < " + nextID + " " + mfcGroup.isEmpty());
+                while (currentID + dif < nextID) {
+                    //System.out.println("        CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
+                    toAdd.add(false);
+                    currentID += dif;
+                    currentSize += 1;
+                }
 
-            //System.out.println("INC TO ADD => " + (byte)(id - currentID + Byte.MIN_VALUE));
-            inc.add((byte) (id - currentID + Byte.MIN_VALUE));
-            currentSize += Byte.SIZE;
-            currentID = id;
-            counter++;
+                toAdd.add(true);
+                currentSize += 1;
 
+                //System.out.println("INC TO ADD => " + (byte)(nextID - currentID + Byte.MIN_VALUE));
+                inc.add((byte) (nextID - currentID + Byte.MIN_VALUE));
+                currentSize += Byte.SIZE;
+                currentID = nextID;
+
+            }
         }
 
         //System.out.println("MAX SIZE => " + maxSize + " | CURRENTSIZE => " + currentSize);
@@ -740,20 +778,12 @@ public class ChunkManager {
         }
 
         //System.out.println("TENHO " + counter +1 + " IDS");
-        CompressedMissingChunksID structPointer = new CompressedMissingChunksID(referenceID, toAddArray, incArray);;
-        return structPointer;
+
+        return new CompressedMissingChunksID(referenceID, toAddArray, incArray);
     }
 
     public ArrayList<Integer> getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
         ArrayList<Integer> res = new ArrayList<Integer>();
-
-/*        System.out.println("TOADD:");
-        for(boolean b : cmcid.toAdd){
-            System.out.print(b + " | ");
-        }
-        System.out.println("INC:");
-        for(byte i : cmcid.increments)
-            System.out.print(i + " | ");*/
 
         int currentID = cmcid.referenceID;
 
@@ -793,7 +823,12 @@ public class ChunkManager {
     * Retrieves the amount of Missing Filechunks
     */
     public int getNumberOfMissingChunks(){
-        return this.mi.missingChunks.size();
+        int numberOfMissingChunks = 0;
+        for(boolean val : this.mi.missingChunks)
+            if(val)
+                numberOfMissingChunks++;
+
+        return numberOfMissingChunks;
     }
 
     /*

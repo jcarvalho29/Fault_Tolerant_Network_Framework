@@ -9,7 +9,7 @@ public class ChunkManagerMetaInfo implements Serializable {
     public int numberOfChunksInArray;
     public long chunksSize;
     public boolean full;
-    public ArrayList<Integer> missingChunks;
+    public boolean[] missingChunks;
     public String Hash;
     public String HashAlgoritm;
 
@@ -21,8 +21,9 @@ public class ChunkManagerMetaInfo implements Serializable {
         this.numberOfChunksInArray = mi.numberOfChunksInArray;
         this.chunksSize = mi.chunksSize;
         this.full = mi.full;
+        this.missingChunks = new boolean[this.numberOfChunks];
         if(mi.missingChunks != null)
-            this.missingChunks = new ArrayList<Integer>(mi.missingChunks);
+            System.arraycopy(mi.missingChunks, 0, this.missingChunks, 0, mi.numberOfChunks);
         this.Hash = mi.Hash;
         this.HashAlgoritm = mi.HashAlgoritm;
     };

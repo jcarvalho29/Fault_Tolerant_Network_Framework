@@ -127,6 +127,7 @@ public class FastUnicastSender implements Runnable{
                 if(this.cToSend.size() > 0){
 
                     sendFileChunk(this.cToSend.get(0));
+                    this.cToSend.remove(0);
 
                     cycleEnd = System.currentTimeMillis();
                     cycleExecTime = (int) (cycleEnd - cycleStart);
@@ -143,11 +144,10 @@ public class FastUnicastSender implements Runnable{
                             burst = 0;
                         }
                         else*/
-                            Thread.sleep((1000 / dps) - cycleExecTime);
+                        Thread.sleep((1000 / dps) - cycleExecTime);
                     }
 
                     cycleStart = System.currentTimeMillis();
-                    this.cToSend.remove(0);
                 }
 
                 if (this.cToSend.size() == 0) {

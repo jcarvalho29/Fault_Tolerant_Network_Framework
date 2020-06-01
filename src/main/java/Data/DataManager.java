@@ -235,17 +235,20 @@ public class DataManager {
     * Adds the provided chunks to the Document that the provided MacAddress/Hash identify. This is intended to be used with the
     * Documents that are being received and not all chunks are present in Memory.
     * */
-    private void addChunksToDocument (String hash, ArrayList<Chunk> chunks){
+    private boolean addChunksToDocument (String hash, ArrayList<Chunk> chunks){
         Document f;
+        boolean full = false;
 
         if ((this.dmMI.cmHashs.contains(hash)) && (this.documents.containsKey(hash)) && (!this.dmMI.isDocumentFull.get(hash))) {
             f = this.documents.get(hash);
 
-            f.addChunks(chunks);
-            if (f.isFull())
+            full = f.addChunks(chunks);
+            if (full)
                 this.dmMI.isDocumentFull.put(hash, true);
             this.documents.put(hash, f); //???????? PReciso????
         }
+
+        return full;
     }
 
     /*
@@ -399,31 +402,38 @@ public class DataManager {
      * Adds the provided chunks to the ChunkManager that the provided MacAddress/Hash identify. This is intended to be used with the
      * ChunkManager that are being received and not all chunks are present in Memory.
      * */
-    private void addChunksToMessage(String Hash, ArrayList<Chunk> chunks){
+    private boolean addChunksToMessage(String Hash, ArrayList<Chunk> chunks){
         ChunkManager cm;
+        boolean full = false;
 
         if ((this.dmMI.cmHashs.contains(Hash)) && (!this.dmMI.isMessageFull.get(Hash))){
             cm = this.messages.get(Hash);
-            cm.addChunks(chunks);
+            full = cm.addChunks(chunks);
             if(cm.getFull())
                 this.dmMI.isMessageFull.put(Hash, true);
             this.messages.put(Hash, cm); //???????? PReciso????
         }
+
+        return full;
     }
 
 
     /*
     * Tries to add the specified chunks to a ChunkManager defined by the provided Hash
     * */
-    public void addChunks(String Hash, ArrayList<Chunk> chunks) {
+    public boolean addChunks(String Hash, ArrayList<Chunk> chunks) {
+        boolean full = false;
         if (this.documents.containsKey(Hash)) {
-            addChunksToDocument(Hash, chunks);
+            full = addChunksToDocument(Hash, chunks);
             System.out.println(chunks.size() + " CHUNKS ADDED");
         }
-        else
+        else {
             if (this.messages.containsKey(Hash)) {
-                addChunksToMessage(Hash, chunks);
+                full = addChunksToMessage(Hash, chunks);
+            }
         }
+
+        return full;
     }
 
     /*
@@ -639,9 +649,28 @@ public class DataManager {
         ArrayList<CompressedMissingChunksID> res = null;
         if(cm != null){
             res = cm.getCompressedMissingChunksID(maxSize);
+            //DEBUG!!!!!!!!!!!!!!!!!!!!!!!
+            if(res != null)
+                checkCMCID(cm, cm.getMissingChunksIDs(), res);
         }
 
+
         return res;
+    }
+
+    private void checkCMCID(ChunkManager cm, boolean[] missingChunksIDs, ArrayList<CompressedMissingChunksID> res) {
+
+        int numberOfMissingChunks = cm.getNumberOfMissingChunks();
+        ArrayList<Integer> ids = new ArrayList<Integer>();
+
+        for(CompressedMissingChunksID c : res){
+            ids.addAll(cm.getIDsFromCompressedMissingChunksID(c));
+        }
+
+        if(numberOfMissingChunks != ids.size())
+            System.out.println("                SOMETHING WRONG WITH THE MISSINGCHUNKS");
+
+
     }
 
     public boolean isChunkManagerFull(String Hash) {

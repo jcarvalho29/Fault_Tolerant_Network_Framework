@@ -240,12 +240,12 @@ public class TransferReceiverManager implements Runnable{
             if (this.consecutiveTimeouts > 0 && this.consecutiveTimeouts < 60) {
                 if(this.consecutiveTimeouts == 3) {
                     updateCycleStats();
-                    sendMissingChunkIDs();
                     System.out.println("SENT MISSING CHUNKS DUE TO TIMEOUT!! == 3");
+                    sendMissingChunkIDs();
                 }
                 if(this.consecutiveTimeouts%12 == 0) {
+                    System.out.println("SENT MISSING CHUNKS DUE TO TIMEOUT!! %12");
                     sendMissingChunkIDs();
-                    System.out.println("SENT MISSING CHUNKS DUE TO TIMEOUT!! %10");
                 }
             }
             else {
@@ -254,7 +254,6 @@ public class TransferReceiverManager implements Runnable{
                     System.out.println("KILLED! WAY TO MANY TIMEOUTS");
                     updateCycleStats();
                 }
-
             }
         }
         else{
@@ -409,6 +408,7 @@ public class TransferReceiverManager implements Runnable{
         long cycleEnd;
         int tmri_Dropped = 0;
         boolean isFirstCycle = true;
+        boolean isCMFull = false;
 
         while(this.run) {
             cycleStart = System.currentTimeMillis();
@@ -427,26 +427,29 @@ public class TransferReceiverManager implements Runnable{
             }
 
             if (chunksReceived.size() > 0) {
+                isCMFull = this.dm.addChunks(this.tmi.cmmi.Hash, new ArrayList<Chunk>(chunksReceived));
 
+                //UPDATE STATS
                 if(isFirstCycle){
                     isFirstCycle = false;
                     long min = Long.MAX_VALUE;
                     long receiveTime;
                     for(FastUnicastListener fus : this.fastListeners){
                         receiveTime = fus.getFirstCMReceivedTimestamp();
-                        if (min > receiveTime)
+                        if (min > receiveTime) {
                             min = receiveTime;
+                        }
                     }
                     this.stats.setFirstChunkReceivedTime(min);
                     this.stats.setTransferCycleBeginning(min);
                 }
+
                 this.TransferMultiReceiverInfoReceived = true;
                 this.receivedDPDuringCycle += chunksReceived.size();
 
                 updateTimeoutStatus(true);
-                this.dm.addChunks(this.tmi.cmmi.Hash, new ArrayList<Chunk>(chunksReceived));
 
-                if (this.dm.isChunkManagerFull(this.tmi.cmmi.Hash)) {
+                if (isCMFull) {
                     this.FastReceiversSES.shutdownNow();
                     System.out.println("TRANSFER DONE");
                     updateCycleStats();

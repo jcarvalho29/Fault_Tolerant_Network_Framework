@@ -97,11 +97,13 @@ public class TransferMultiSender implements Runnable{
             this.timeout_Lock.unlock();
 
             TransferMetaInfo tmi;
+            ChunkManagerMetaInfo cmmi = new ChunkManagerMetaInfo(this.cmmi);
 
+            cmmi.missingChunks = null;
             if (this.DocumentName == null)
-                tmi = new TransferMetaInfo(this.MacAddress, this.ID, this.cmmi, this.confirmation);
+                tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.confirmation);
             else
-                tmi = new TransferMetaInfo(this.MacAddress, this.ID, this.cmmi, this.DocumentName, this.confirmation);
+                tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.DocumentName, this.confirmation);
 
             byte[] info = getBytesFromObject((Object) tmi);
             System.out.println("TRANSFERMETAIFO SIZE " + info.length);
