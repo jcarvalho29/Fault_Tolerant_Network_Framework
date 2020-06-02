@@ -378,6 +378,14 @@ public class TransferMultiSender implements Runnable{
     }
 
     private Object getObjectFromBytes(byte[] data){
+        if(data == null || data.length == 0) {
+            System.out.println("                MENSAGEM VAZIA WHATTTTTTTTTTTTTT");
+            try {
+                Thread.sleep(100000000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         ByteArrayInputStream bis = new ByteArrayInputStream(data);
         ObjectInput in = null;
         Object o = null;

@@ -198,7 +198,7 @@ public class Main{
 
     private static String createDocument(DataManager dm, int maxPayloadSize, String docName) {
         //return dm.newDocument((System.getProperty("user.home") + "/Desktop/"), maxPayloadSize);
-        return dm.newDocument((System.getProperty("user.home") + "/Desktop/" + docName), maxPayloadSize);
+        return dm.newDocument((System.getProperty("user.home") + "/Desktop/" + docName), maxPayloadSize, 100000);
                 //Fault Tolerant Network Framework/target/Fault_Tolerant_Network_Framework-1.0-SNAPSHOT.jar")" +
 
     }

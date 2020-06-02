@@ -261,6 +261,7 @@ public class ChunkManager {
                     info.add(buffer);
                 }
                 Chunks = createChunks(info, i);
+                info.clear();
                 writeChunksToFolder(Chunks);
             }
         } catch (IOException e) {
@@ -557,19 +558,46 @@ public class ChunkManager {
      *
      * This function is intended to be used to retrieve FileChunks that have been marked as Missing by a File Receiver.
      */
-    public ArrayList<Chunk> getMissingChunks(ArrayList<Integer> mfc){
-        String tmpFolder = this.Root + this.mi.Hash + "/Chunks/";
+    public Chunk[] getMissingChunks(ArrayList<Integer> mfc){
+        String folder = this.Root + this.mi.Hash + "/Chunks/";
 
-        File ficheiro = new File (tmpFolder);
-        ArrayList<Chunk> res = new ArrayList<Chunk>();
+        File folderFile = new File (folder);
+        Chunk[] res = new Chunk[mfc.size()];
         int id;
         try {
-            if(ficheiro.exists() && ficheiro.isDirectory()){
+            if(folderFile.exists() && folderFile.isDirectory()){
                 Chunk f;
+               /* byte[] buffer = new byte[this.mi.datagramMaxSize];
+                byte[] Chunk;
+                int lastChunkSize =(int) (this.mi.chunksSize % ((this.mi.numberOfChunks-1) * this.mi.datagramMaxSize));
+                int lastChunkID = this.mi.numberOfChunks-1 + Integer.MIN_VALUE;
+                int j, k;*/
                 for(int i = 0; i < mfc.size(); i++){
                     id = mfc.get(i);
-                    f = new Chunk(Files.readAllBytes(Paths.get(tmpFolder + "/" + id + ".chunk")), id);
-                    res.add(f);
+                   /* FileInputStream fis = new FileInputStream(new File(tmpFolder + "/" + id + ".chunk"));
+                    BufferedInputStream bis = new BufferedInputStream(fis);
+
+
+                    k = 0;
+                    if(id != lastChunkID) {
+                        Chunk = new byte[this.mi.datagramMaxSize];
+                        while((j = bis.read(buffer, 0, this.mi.datagramMaxSize)) != -1){
+                            System.arraycopy(buffer, 0, Chunk, k, j);
+                            k += j;
+                        };
+                    }
+                    else{
+                        Chunk = new byte[lastChunkSize];
+                        while((j = bis.read(buffer, 0, lastChunkSize)) != -1){
+                            System.arraycopy(buffer, 0, Chunk, k, j);
+                            k += j;
+                        };
+                    }
+                    f = new Chunk(Chunk, id);
+                    fis.close();
+                    bis.close();*/
+                    f = new Chunk(Files.readAllBytes(Paths.get(folder + "/" + id + ".chunk")), id);
+                    res[i] = f;
                 }
 
             }
