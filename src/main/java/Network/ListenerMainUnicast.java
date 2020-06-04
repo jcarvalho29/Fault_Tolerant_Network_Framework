@@ -77,9 +77,9 @@ public class ListenerMainUnicast implements Runnable{
                     System.out.println("AINDA NAO TENHO ESTE CM");
 
                     if (tmi.DocumentName != null)
-                        this.dm.newDocument(tmi.cmmi.Hash, tmi.cmmi.numberOfChunks, tmi.DocumentName);
+                        this.dm.newDocument(tmi.cmmi.Hash, tmi.cmmi.datagramMaxSize, tmi.cmmi.numberOfChunks, tmi.DocumentName);
                     else
-                        this.dm.newMessage(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.numberOfChunks);
+                        this.dm.newMessage(tmi.MacAddress, tmi.cmmi.Hash, tmi.cmmi.datagramMaxSize, tmi.cmmi.numberOfChunks);
                 }
 
 

@@ -250,13 +250,15 @@ public class TransferReceiverManager implements Runnable{
             }
             else {
                 if (this.consecutiveTimeouts > 60){
+                    sendOver(true);
+                    updateCycleStats();
                     this.kill();
                     System.out.println("KILLED! WAY TO MANY TIMEOUTS");
-                    updateCycleStats();
                 }
             }
         }
         else{
+            sendOver(false);
             this.kill();
             System.out.println("KILLED! DOESN'T NEED CONFIRMATION");
             updateCycleStats();
@@ -428,7 +430,6 @@ public class TransferReceiverManager implements Runnable{
         while(this.run) {
             cycleStart = System.currentTimeMillis();
 
-
             ArrayList<ChunkMessage[]> chunksReceived = new ArrayList<ChunkMessage[]>();
             ChunkMessage[] chunkHeaders;
 
@@ -485,7 +486,6 @@ public class TransferReceiverManager implements Runnable{
                 }
                 else {
                     tmri_Dropped++;
-                    //System.out.println("INC TMRI_DROPPED TO " + tmri_Dropped);
                     if(tmri_Dropped%5 == 0) {
                         sendTransferMultiReceiverInfo();
                         System.out.println("SENT TIMEOUT TMRI");
@@ -497,12 +497,13 @@ public class TransferReceiverManager implements Runnable{
 
             int cycleExecTime = (int) (cycleEnd - cycleStart);
             int sleepTime = getSleepTime(cycleExecTime);
-            if(sleepTime > 0)
-            try {
-                //System.out.println("SLEEP FOR " + sleepTime);
-                Thread.sleep(sleepTime);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            if(this.run && sleepTime > 0) {
+                try {
+                    //System.out.println("SLEEP FOR " + sleepTime);
+                    Thread.sleep(sleepTime);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }

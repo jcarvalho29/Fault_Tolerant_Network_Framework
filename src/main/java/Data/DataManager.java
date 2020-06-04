@@ -111,7 +111,6 @@ public class DataManager {
         if(!(this.dmMI.cmHashs.contains(hash))) {
             registerHash(hash);
             //guardar o file
-            System.out.println("REGISTERED WITH " + hash);
             this.documents.put(hash, f);
 
             //assinala que o ficheiro esta completo
@@ -212,11 +211,11 @@ public class DataManager {
             updateDataManagerMetaInfoFile();
         }
     }
-    public void newDocument(String hash, int numberOfChunks, String documentName) {
+    public void newDocument(String hash, int datagramMaxSize, int numberOfChunks, String documentName) {
 
         if(!this.dmMI.cmHashs.contains(hash)) {
             System.out.println("ITS A NEW DOCUMENT");
-            Document f = new Document(this.dmMI.Root, hash, numberOfChunks, documentName, "SHA-256");
+            Document f = new Document(this.dmMI.Root, hash, datagramMaxSize, numberOfChunks, documentName, "SHA-256");
 
             registerHash(hash);
 
@@ -367,8 +366,8 @@ public class DataManager {
     * Constructs a ChunkManager object for Messages to be received. It is needed to continuously add the chunks that are missing.
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
-    public void newMessage(String hash, String hashAlgorithm, int numberOfChunks){
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, hash, hashAlgorithm, numberOfChunks);
+    public void newMessage(String hash, String hashAlgorithm, int  datagramMaxSize, int numberOfChunks){
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, datagramMaxSize, hash, hashAlgorithm, numberOfChunks);
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
 
@@ -383,8 +382,8 @@ public class DataManager {
             updateDataManagerMetaInfoFile();
         }
     }
-    public void newMessage(String hash, int numberOfChunks){
-        ChunkManager cm = new ChunkManager(this.dmMI.Root, hash, "SHA-256", numberOfChunks);
+    public void newMessage(String hash, int datagramMaxSize, int numberOfChunks){
+        ChunkManager cm = new ChunkManager(this.dmMI.Root, datagramMaxSize, hash, "SHA-256", numberOfChunks);
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
 
@@ -486,7 +485,7 @@ public class DataManager {
         ArrayList <String> hashs;
         if(!this.dmMI.cmHashs.contains(hash)) {
             this.dmMI.cmHashs.add(hash);
-            System.out.println("REGISTERED HASH");
+            System.out.println("REGISTERED HASH " + hash);
         }
         else
             System.out.println("    DID NOT REGISTER HASH");

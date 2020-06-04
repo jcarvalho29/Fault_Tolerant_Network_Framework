@@ -45,11 +45,11 @@ public class Document {
         loadDocument(maxDatagramSize, hashAlgorithm, maxChunksLoadedAtaTime);
     }
 
-    public Document(String Root, String hash, int numberOfChunks, String DocumentName, String hashAlgorithm){
+    public Document(String Root, String hash, int datagramMaxSize, int numberOfChunks, String DocumentName, String hashAlgorithm){
         this.Root = Root;
         this.documentName = DocumentName;
 
-        this.cm = new ChunkManager(this.Root, hash, hashAlgorithm, numberOfChunks);
+        this.cm = new ChunkManager(this.Root, datagramMaxSize, hash, hashAlgorithm, numberOfChunks);
 
     }
 
@@ -102,6 +102,11 @@ public class Document {
         System.out.println("ROOT => " + this.Root);
         System.out.println("FOLDER => " + folder);
         System.out.println("DOCNAME => " + this.documentName);
+
+        System.out.println("");
+        this.cm.mi.print();
+        System.out.println("");
+
         String folderToWritePath = folderPathNormalizer(folder) + this.documentName ;
         String folderToReadPath = folderPathNormalizer(this.Root + "/" + this.cm.mi.Hash) + "/Chunks/";
 
@@ -115,16 +120,21 @@ public class Document {
             FileOutputStream outputStream = new FileOutputStream(folderToWritePath, false);
 
             long start = System.currentTimeMillis();
-            byte[] buffer = new byte[this.cm.mi.datagramMaxSize *10000];
+
+            int chunksInBuffer = Math.min(10000, numberOfChunks);
+            byte[] buffer = new byte[this.cm.mi.datagramMaxSize * chunksInBuffer];
             while (i < numberOfChunks) {
                 j = 0;
                 totalReadBytes = 0;
-                while (j < 10000 && i < numberOfChunks) {
+                while (j < chunksInBuffer && i < numberOfChunks) {
                     if(i == numberOfChunks-1)
                         readBytes = (int)(this.cm.mi.chunksSize - ((numberOfChunks -1) * this.cm.mi.datagramMaxSize));
 
                     p = Paths.get(folderToReadPath + (i + Integer.MIN_VALUE) + ".chunk");
-                    System.arraycopy(Files.readAllBytes(p), 0, buffer, 0, readBytes);
+                    //System.out.println("BUFFER LENGTH " + buffer.length);
+                    //System.out.println("TOTALREADBYTES " + totalReadBytes);
+                    //System.out.println("READBYTES " + readBytes);
+                    System.arraycopy(Files.readAllBytes(p), 0, buffer, totalReadBytes, readBytes);
                     totalReadBytes += readBytes;
                     i++;
                     j++;

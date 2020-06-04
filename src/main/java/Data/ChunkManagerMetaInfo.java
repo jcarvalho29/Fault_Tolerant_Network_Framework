@@ -11,7 +11,7 @@ public class ChunkManagerMetaInfo implements Serializable {
     public boolean full;
     public boolean[] missingChunks;
     public String Hash;
-    public String HashAlgoritm;
+    public String HashAlgorithm;
 
     public ChunkManagerMetaInfo(){};
 
@@ -25,6 +25,16 @@ public class ChunkManagerMetaInfo implements Serializable {
         if(mi.missingChunks != null)
             System.arraycopy(mi.missingChunks, 0, this.missingChunks, 0, mi.numberOfChunks);
         this.Hash = mi.Hash;
-        this.HashAlgoritm = mi.HashAlgoritm;
+        this.HashAlgorithm = mi.HashAlgorithm;
     };
+
+    public void print(){
+        System.out.println("Datagram Max Size " + datagramMaxSize);
+        System.out.println("Number of Chunks " + numberOfChunks);
+        System.out.println("Number of Chunks in Array " + numberOfChunksInArray);
+        System.out.println("Chunks Size " + chunksSize);
+        System.out.println("Full " + full);
+        System.out.println("Hash " + Hash);
+        System.out.println("Hash Algorithm " + HashAlgorithm);
+    }
 }

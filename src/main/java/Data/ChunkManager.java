@@ -41,7 +41,7 @@ public class ChunkManager {
     *   String hash => Hash of the File
     */
 
-    public ChunkManager (String root, String hash, String hashAlgorithm,  int numberOfChunks){
+    public ChunkManager (String root, int datagramMaxSize, String hash, String hashAlgorithm, int numberOfChunks){
         root = folderPathNormalizer(root);
 
         String hashFolderPath = root + hash + "/";
@@ -59,12 +59,13 @@ public class ChunkManager {
         this.mi = new ChunkManagerMetaInfo();
         this.mi_Lock = new ReentrantLock();
 
+        this.mi.datagramMaxSize = datagramMaxSize;
         this.mi.numberOfChunks = numberOfChunks;
         this.mi.numberOfChunksInArray = 0;
         this.mi.chunksSize = 0;
         this.mi.full = false;
         this.mi.Hash = hash;
-        this.mi.HashAlgoritm = hashAlgorithm;
+        this.mi.HashAlgorithm = hashAlgorithm;
 
         this.missingChunks_Lock = new ReentrantLock();
         this.mi.missingChunks = new boolean[numberOfChunks];
@@ -102,7 +103,7 @@ public class ChunkManager {
 
         Chunk[] chunks = createChunks(splitInfoIntoArrays(info), this.mi.numberOfChunks, this.mi.numberOfChunks);
 
-        this.mi.HashAlgoritm = hashAlgorithm;
+        this.mi.HashAlgorithm = hashAlgorithm;
         this.mi.Hash = hash_Chunks(chunks, hashAlgorithm);
 
         File hashFolder = new File(this.Root + "/" + this.mi.Hash + "/");
@@ -126,7 +127,7 @@ public class ChunkManager {
         this.mi = new ChunkManagerMetaInfo();
         this.mi.Hash = "TMPFILE";
         this.mi_Lock = new ReentrantLock();
-        this.mi.HashAlgoritm = hashAlgorithm;
+        this.mi.HashAlgorithm = hashAlgorithm;
 
         File tempFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!tempFolder.exists() && !tempFolder.isDirectory() && !tempFolder.mkdir()) ;
@@ -238,7 +239,7 @@ public class ChunkManager {
     * This will load a File to Chunks to the Memory and will only have maxChunksLoadedAtaTime chunks in Ram at a time
     * */
     public String loadInfoRamEfficient(String localFilePath, int maxChunksLoadedAtaTime){
-        Hash h = new Hash(this.mi.HashAlgoritm);
+        Hash h = new Hash(this.mi.HashAlgorithm);
         try {
             FileInputStream fis = new FileInputStream(localFilePath);
             BufferedInputStream bis = new BufferedInputStream(fis, 64*1024);
@@ -889,7 +890,7 @@ public class ChunkManager {
     }
 
     public boolean checkAllChunksHash(){
-        Hash h = new Hash(this.mi.HashAlgoritm);
+        Hash h = new Hash(this.mi.HashAlgorithm);
 
         ArrayList<Chunk> chunks = new ArrayList<Chunk>();
         String folderPath = this.Root + this.mi.Hash + "/Chunks/";

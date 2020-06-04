@@ -90,7 +90,7 @@ public class Main{
 
                 switch (Integer.parseInt(option)) {
                     case 0: {
-                        docHash = createDocument(dm, 1300, "Fault Tolerant Network Framework/target/Fault_Tolerant_Network_Framework-1.0-SNAPSHOT.jar");
+                        docHash = createDocument(dm, 1300, "Fault_Tolerant_Network_Framework/target/Fault_Tolerant_Network_Framework-1.0-SNAPSHOT.jar");
                         break;
                     }
                     case 1: {

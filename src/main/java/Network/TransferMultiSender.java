@@ -102,8 +102,10 @@ public class TransferMultiSender implements Runnable{
             if (this.consecutiveTimeouts < 13) {
                 TransferMetaInfo tmi;
                 ChunkManagerMetaInfo cmmi = new ChunkManagerMetaInfo(this.cmmi);
-
                 cmmi.missingChunks = null;
+                cmmi.numberOfChunksInArray = 0;
+                cmmi.full = false;
+
                 if (this.DocumentName == null)
                     tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.confirmation);
                 else
