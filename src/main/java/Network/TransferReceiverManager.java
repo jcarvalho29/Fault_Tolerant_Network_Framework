@@ -476,6 +476,7 @@ public class TransferReceiverManager implements Runnable{
                     System.out.println("TRANSFER DONE");
                     updateCycleStats();
                     sendOver(false);
+                    this.dm.changeIsDocumentFullEntry(this.tmi.cmmi.Hash, true);
                     this.kill();
                 }
             }

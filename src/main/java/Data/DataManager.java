@@ -287,12 +287,13 @@ public class DataManager {
         destinationPath = folderPathNormalizer(destinationPath);
 
         Document d;
-
+        System.out.println("Hash " + Hash);
         System.out.println(this.dmMI.cmHashs);
         System.out.println(this.dmMI.cmHashs.contains(Hash));
         System.out.println(this.documents);
         System.out.println(this.documents.containsKey(Hash));
         System.out.println(this.dmMI.isDocumentFull.get(Hash));
+
         if(this.dmMI.cmHashs.contains(Hash)){//CHECK THIS
             System.out.println("CMHASH HAS HASH");
             if(this.documents.containsKey(Hash) && this.dmMI.isDocumentFull.get(Hash)){//CHECK THIS
@@ -672,6 +673,13 @@ public class DataManager {
             System.out.println("                SOMETHING WRONG WITH THE MISSINGCHUNKS");
 
 
+    }
+
+    public void changeIsDocumentFullEntry(String Hash, boolean full){
+        this.dmMI.isDocumentFull.remove(Hash);
+        this.dmMI.isDocumentFull.put(Hash, full);
+
+        updateDataManagerMetaInfoFile();
     }
 
     public boolean isChunkManagerFull(String Hash) {
