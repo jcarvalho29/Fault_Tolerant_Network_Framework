@@ -12,7 +12,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class FastUnicastSender implements Runnable{
@@ -21,7 +20,8 @@ public class FastUnicastSender implements Runnable{
     private InetAddress IP;
     private int destPort;
     private int dpPS;
-    private int sleeptime;
+    private int sleeptimeMS;
+    private int sleeptimeNS;
     private ReentrantLock dpsLock;
     private DatagramSocket ds;
 
@@ -43,7 +43,8 @@ public class FastUnicastSender implements Runnable{
         this.IP = IP;
         this.destPort = destPort;
         this.dpPS = dpPS;
-        this.sleeptime = 1000 / this.dpPS;
+        this.sleeptimeMS = 1000 / this.dpPS;
+        this.sleeptimeNS = (1000000000/this.dpPS) % 1000000;
         this.dpsLock = new ReentrantLock();
 
         this.cm = cm;
@@ -124,7 +125,6 @@ public class FastUnicastSender implements Runnable{
         this.isRunning_lock.lock();
         this.isRunning = true;
         this.isRunning_lock.unlock();
-        long start, end;
 
         Chunk[] chunks;
         //this.chunkArraysLock.lock();
@@ -133,7 +133,7 @@ public class FastUnicastSender implements Runnable{
 
         this.chunkIDsLock.lock();
         if(chunkArraysSize == 0 && this.chunkIDs.size() > 0) {
-            start = System.currentTimeMillis();
+            //start = System.currentTimeMillis();
             if (this.chunkIDs.size() < 200) {
                 chunks = this.cm.getMissingChunks(this.chunkIDs);
                 this.chunkIDs.clear();
@@ -146,26 +146,28 @@ public class FastUnicastSender implements Runnable{
             this.chunkArrays.add(chunks);
             //this.chunkArraysLock.unlock();
             chunks = null;
-            end = System.currentTimeMillis();
-            System.out.println("        WASTED " + (end - start) + " ms LOADING INITIAL CHUNKS");
+            //end = System.currentTimeMillis();
+            //System.out.println("        WASTED " + (end - start) + " ms LOADING INITIAL CHUNKS");
         }
         this.chunkIDsLock.unlock();
 
 
 
-        int cycleExecTime, sleepTime;
-        long cycleStart = System.currentTimeMillis(), cycleEnd;
+        int cycleExecTime, sleepTimeMS;
+        long cycleStart = System.currentTimeMillis(), cycleEnd, sleepTimeNS, start;
         Chunk[] chunksToSend;
         int pointer;
 
         this.isRunning_lock.lock();
         //this.chunkArraysLock.lock();
             while(this.chunkArrays.size() > 0){
+                this.isRunning_lock.unlock();
                 chunksToSend = this.chunkArrays.get(0);
                 this.chunkArrays.remove(0);
                 //this.chunkArraysLock.unlock();
                 pointer = 0;
 
+                this.isRunning_lock.lock();
                 while (pointer < chunksToSend.length){
                     this.isRunning_lock.unlock();
 
@@ -174,18 +176,29 @@ public class FastUnicastSender implements Runnable{
                             chunksToSend[pointer] = null;
                             pointer++;
 
-                            cycleEnd = System.currentTimeMillis();
-                            cycleExecTime = (int) (cycleEnd - cycleStart);
-
+                            //CODE THAT DETERMINES THE AMOUNT OF TIME TO SLEEP
                             this.dpsLock.lock();
-                            sleepTime = this.sleeptime;
-                            this.dpsLock.unlock();
-                            if (cycleExecTime < sleepTime) {
+                            if(this.sleeptimeMS != 0) {
+                                this.dpsLock.unlock();
+                                cycleEnd = System.currentTimeMillis();
+                                cycleExecTime = (int) (cycleEnd - cycleStart);
 
-                                Thread.sleep(sleepTime - cycleExecTime);
+                                this.dpsLock.lock();
+                                sleepTimeMS = this.sleeptimeMS;
+                                this.dpsLock.unlock();
+                                if (cycleExecTime < sleepTimeMS) {
+                                    Thread.sleep(sleepTimeMS - cycleExecTime);
+                                }
+
+                                cycleStart = System.currentTimeMillis();
+                            }
+                            else{
+                                sleepTimeNS = this.sleeptimeNS;
+                                this.dpsLock.unlock();
+                                start = System.nanoTime();
+                                while(System.nanoTime() - start < sleepTimeNS);
                             }
 
-                            cycleStart = System.currentTimeMillis();
                         }
                         catch (Exception e){
                             e.printStackTrace();
@@ -193,6 +206,7 @@ public class FastUnicastSender implements Runnable{
 
                     this.isRunning_lock.lock();
                 }
+                this.isRunning_lock.unlock();
 
                 //this.chunkArraysLock.lock();
                 chunkArraysSize = chunkArrays.size();
@@ -200,7 +214,7 @@ public class FastUnicastSender implements Runnable{
 
                 this.chunkIDsLock.lock();
                 if(chunkArraysSize == 0 && this.chunkIDs.size() > 0) {
-                    start = System.currentTimeMillis();
+                    //start = System.currentTimeMillis();
                     if (this.chunkIDs.size() < 200) {
                         chunks = this.cm.getMissingChunks(this.chunkIDs);
                         this.chunkIDs.clear();
@@ -213,12 +227,13 @@ public class FastUnicastSender implements Runnable{
                     this.chunkArrays.add(chunks);
                     //this.chunkArraysLock.unlock();
                     chunks = null;
-                    end = System.currentTimeMillis();
-                    System.out.println("        WASTED " + (end - start) + " ms LOADING INITIAL CHUNKS");
+                    //end = System.currentTimeMillis();
+                    //System.out.println("        WASTED " + (end - start) + " ms LOADING INITIAL CHUNKS");
                 }
                 this.chunkIDsLock.unlock();
 
                 //this.chunkArraysLock.lock();
+                this.isRunning_lock.lock();
             }
         this.isRunning = false;
         this.isRunning_lock.unlock();
@@ -252,11 +267,10 @@ public class FastUnicastSender implements Runnable{
     }
 
     public boolean addChunksToSend(ArrayList<Integer> newChunksIDs) {
-        boolean res = false;
+        boolean res;
         this.isRunning_lock.lock();
-        if(this.isRunning) {
-            res = true;
-        }
+        res = this.isRunning;
+
         this.chunkIDsLock.lock();
         //remove repetidos
         for(int id : newChunksIDs){
@@ -281,7 +295,9 @@ public class FastUnicastSender implements Runnable{
     public void changeDPS(int dps){
         this.dpsLock.lock();
         this.dpPS = dps;
-        this.sleeptime = 1000 / dps;
+        this.sleeptimeMS = 1000 / dps;
+        if(this.sleeptimeMS == 0)
+            this.sleeptimeNS = (1000000000/dps) % 1000000;
         this.dpsLock.unlock();
     }
 

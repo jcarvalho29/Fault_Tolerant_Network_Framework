@@ -1,6 +1,5 @@
 package Network;
 
-import Data.Chunk;
 import Data.CompressedMissingChunksID;
 import Data.DataManager;
 import Messages.*;
@@ -48,7 +47,7 @@ public class TransferReceiverManager implements Runnable{
 
         this.mainListener = ml;
         this.dm = dm;
-        this.stats = new ReceiverStats(MTU-100);
+        this.stats = new ReceiverStats(MTU-100, 5000);
 
         this.destIP = destIP;
         this.destPort = destPort;
@@ -89,7 +88,7 @@ public class TransferReceiverManager implements Runnable{
 
         for(int i = 0; i < numberOfListeners; i++){
 
-            fus = new FastUnicastListener(this.MTU);
+            fus = new FastUnicastListener(this.MTU,this.stats.dps);
             Thread t = new Thread(fus);
 
             t.start();
@@ -113,7 +112,7 @@ public class TransferReceiverManager implements Runnable{
                     data = getBytesFromObject(mcid);
                     dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
                     this.unicastSocket.send(dp);
-                    Thread.sleep(75);
+                    Thread.sleep(2);
                 }
 
                 this.stats.markTransferStartTime();
@@ -137,16 +136,16 @@ public class TransferReceiverManager implements Runnable{
 
         if(cmcIDs == null) {
             System.out.println("Sending CMCID NULL");
-            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, 1000, null);
+            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, this.stats.dps, null);
         }
         else {
             System.out.println("SENDING CMCID WITH IDs");
-            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, 1000, cmcIDs.get(0));
+            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, this.stats.dps, cmcIDs.get(0));
         }
 
         for (int i = 1; cmcIDs != null && i < cmcIDs.size(); i++){
             ////////!!!!!!!!!!!!! MUDIFICAR O DPS PARA EFIETO DE FEEDBACK NO CONTROLO DE FLUXO
-            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), 1000);
+            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), this.stats.dps);
             this.missingChunksIDS.add(mcID);
         }
     }
@@ -165,8 +164,9 @@ public class TransferReceiverManager implements Runnable{
         }
 
         ////////!!!!!!!!!!!!! MUDIFICAR O DPS PARA EFIETO DE FEEDBACK NO CONTROLO DE FLUXO
-        for (int i = 0; cmcIDs != null && i < cmcIDs.size(); i++){
-            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), 1000);
+        //retirei a confirmação de null
+        for (int i = 0; i < cmcIDs.size(); i++){
+            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), this.stats.dps);
             mcIDs.add(mcID);
         }
 
@@ -234,7 +234,7 @@ public class TransferReceiverManager implements Runnable{
             this.consecutiveTimeouts = 0;
         else {
             this.consecutiveTimeouts++;
-            System.out.println("TIMEOUT " + this.consecutiveTimeouts);
+            //System.out.println("TIMEOUT " + this.consecutiveTimeouts);
         }
         if(this.tmi.Confirmation){
             if (this.consecutiveTimeouts > 0 && this.consecutiveTimeouts < 60) {
@@ -376,10 +376,10 @@ public class TransferReceiverManager implements Runnable{
     private int getSleepTime(int cycleExecTime){
         int cycle = this.stats.getNumberOfTransferCycles();
         int rtt;
-        int sleepTime = 0;
+        int sleepTime = -cycleExecTime;
 
         if(cycle == 1){
-            System.out.println("FIRST CYCLE");
+            //System.out.println("FIRST CYCLE");
             rtt = this.stats.handshakeRTT;
         }
         else{
@@ -387,15 +387,28 @@ public class TransferReceiverManager implements Runnable{
         }
 
 
-        if(rtt == -1) {
-            if(cycleExecTime < 500)
-                sleepTime = 500 - cycleExecTime;
-        }
-        else {
-            if(rtt > 50 && cycleExecTime < rtt)
-                sleepTime = rtt - cycleExecTime;
-            else
-                sleepTime = 50;
+        System.out.println("CYCLE EXEC TIME " + cycleExecTime);
+        if(rtt == -1)
+            sleepTime += 500;
+        else
+            sleepTime += Math.max(rtt, 50);
+
+
+        switch (this.consecutiveTimeouts) {
+            case 1: {
+                sleepTime *= 2;
+                break;
+            }
+            case 2: {
+                sleepTime *= 3;
+                break;
+            }
+            case 3: {
+                sleepTime *= 4;
+                break;
+            }
+            default:
+                break;
         }
 
         return sleepTime;
@@ -406,28 +419,36 @@ public class TransferReceiverManager implements Runnable{
 
         long cycleStart;
         long cycleEnd;
+
         int tmri_Dropped = 0;
         boolean isFirstCycle = true;
         boolean isCMFull = false;
 
+        int receivedChunkMessages = 0;
         while(this.run) {
             cycleStart = System.currentTimeMillis();
 
 
-            ArrayList<Chunk> chunksReceived = new ArrayList<Chunk>();
-            ArrayList<ChunkMessage> chunkHeaders;
+            ArrayList<ChunkMessage[]> chunksReceived = new ArrayList<ChunkMessage[]>();
+            ChunkMessage[] chunkHeaders;
 
+            receivedChunkMessages = 0;
             for (FastUnicastListener fus : this.fastListeners) {
                 chunkHeaders = fus.getChunkHeaders();
-                for (ChunkMessage ch : chunkHeaders) {
-                    if (ch.ID == this.tmi.ID) {
-                        chunksReceived.add(ch.chunk);
-                    }
-                }
+                receivedChunkMessages += chunkHeaders.length;
+                chunksReceived.add(chunkHeaders);
             }
 
-            if (chunksReceived.size() > 0) {
-                isCMFull = this.dm.addChunks(this.tmi.cmmi.Hash, new ArrayList<Chunk>(chunksReceived));
+            if (receivedChunkMessages > 0) {
+
+                ChunkMessage[] cmArray = new ChunkMessage[receivedChunkMessages];
+                int numberOfCMinArray = 0;
+                for (ChunkMessage[] cm : chunksReceived) {
+                    System.arraycopy(cm, 0, cmArray, numberOfCMinArray, cm.length);
+                    numberOfCMinArray += cm.length;
+                }
+
+                isCMFull = this.dm.addChunks(this.tmi.cmmi.Hash, cmArray);
 
                 //UPDATE STATS
                 if(isFirstCycle){
@@ -445,7 +466,7 @@ public class TransferReceiverManager implements Runnable{
                 }
 
                 this.TransferMultiReceiverInfoReceived = true;
-                this.receivedDPDuringCycle += chunksReceived.size();
+                this.receivedDPDuringCycle += receivedChunkMessages;
 
                 updateTimeoutStatus(true);
 
@@ -459,12 +480,12 @@ public class TransferReceiverManager implements Runnable{
             }
             else {
                 if(this.TransferMultiReceiverInfoReceived || tmri_Dropped > 10) {
-                    System.out.println("TIMEOUT TMRI_DROPPED => " + tmri_Dropped);
+                    //System.out.println("TIMEOUT TMRI_DROPPED => " + tmri_Dropped);
                     updateTimeoutStatus(false);
                 }
                 else {
                     tmri_Dropped++;
-                    System.out.println("INC TMRI_DROPPED TO " + tmri_Dropped);
+                    //System.out.println("INC TMRI_DROPPED TO " + tmri_Dropped);
                     if(tmri_Dropped%5 == 0) {
                         sendTransferMultiReceiverInfo();
                         System.out.println("SENT TIMEOUT TMRI");
@@ -476,9 +497,10 @@ public class TransferReceiverManager implements Runnable{
 
             int cycleExecTime = (int) (cycleEnd - cycleStart);
             int sleepTime = getSleepTime(cycleExecTime);
+            if(sleepTime > 0)
             try {
-                System.out.println("SLEEP FOR 3*" + sleepTime);
-                Thread.sleep(3*sleepTime);
+                //System.out.println("SLEEP FOR " + sleepTime);
+                Thread.sleep(sleepTime);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

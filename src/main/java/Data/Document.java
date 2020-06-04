@@ -1,5 +1,7 @@
 package Data;
 
+import Messages.ChunkMessage;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -7,13 +9,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Document {
 
     private String Root;
 
-    private String documentName;
+    public String documentName;
 
     public ChunkManager cm;
 
@@ -60,7 +62,7 @@ public class Document {
     private void loadDocument(int maxDatagramSize, String hashAlgorithm){
 
         try {
-            File fileToLoad = new java.io.File(this.localDocumentPath);
+            File fileToLoad = new File(this.localDocumentPath);
             FileInputStream fis = new FileInputStream(this.localDocumentPath);
             byte[] info = new byte[Math.toIntExact(fileToLoad.length())];
             fis.read(info);
@@ -78,7 +80,7 @@ public class Document {
     /*
      * Given an ArrayList of chunks, this function uses the Data.ChunkManager object to write them to Root/MacAddress/hash/chunks folder
      * */
-    public boolean addChunks(ArrayList<Chunk> chunks){
+    public boolean addChunks(ChunkMessage[] chunks){
         return this.cm.addChunks(chunks);
     }
 
@@ -87,7 +89,7 @@ public class Document {
      * */
     public void delete(){
         this.cm.eraseChunks();
-        File hashDocument = new File(this.Root + "/" + this.cm.getHash());
+        File hashDocument = new File(this.Root + "/" + this.cm.mi.Hash);
 
         while(hashDocument.exists() && !hashDocument.delete());
     }
@@ -101,24 +103,38 @@ public class Document {
         System.out.println("FOLDER => " + folder);
         System.out.println("DOCNAME => " + this.documentName);
         String folderToWritePath = folderPathNormalizer(folder) + this.documentName ;
-        String folderToReadPath = folderPathNormalizer(this.Root + "/" + this.cm.getHash()) + "/Chunks/";
+        String folderToReadPath = folderPathNormalizer(this.Root + "/" + this.cm.mi.Hash) + "/Chunks/";
 
-        Chunk chunk;
         int i = 0;
-        int numberOfChunks = this.cm.getNumberOfChunks();
+        int j = 0;
+        int readBytes = this.cm.mi.datagramMaxSize;
+        int totalReadBytes = 0;
+        int numberOfChunks = this.cm.mi.numberOfChunks;
         try {
             Path p;
-            FileOutputStream outputStream = new FileOutputStream(folderToWritePath, true);
+            FileOutputStream outputStream = new FileOutputStream(folderToWritePath, false);
 
+            long start = System.currentTimeMillis();
+            byte[] buffer = new byte[this.cm.mi.datagramMaxSize *10000];
             while (i < numberOfChunks) {
-                p = Paths.get(folderToReadPath + (i + Integer.MIN_VALUE) + ".chunk");
-                //chunk = new Data.Chunk(Files.readAllBytes(p), (i + Integer.MIN_VALUE));
+                j = 0;
+                totalReadBytes = 0;
+                while (j < 10000 && i < numberOfChunks) {
+                    if(i == numberOfChunks-1)
+                        readBytes = (int)(this.cm.mi.chunksSize - ((numberOfChunks -1) * this.cm.mi.datagramMaxSize));
 
-                //outputStream.write(chunk.getChunk());
-                outputStream.write(Files.readAllBytes(p));
-                i++;
+                    p = Paths.get(folderToReadPath + (i + Integer.MIN_VALUE) + ".chunk");
+                    System.arraycopy(Files.readAllBytes(p), 0, buffer, 0, readBytes);
+                    totalReadBytes += readBytes;
+                    i++;
+                    j++;
+                }
+                outputStream.write(Arrays.copyOf(buffer, totalReadBytes));
             }
+            buffer = null;
             outputStream.close();
+            long end = System.currentTimeMillis();
+            System.out.println("TOOK " + (end-start));
         }
         catch (Exception e){
             e.printStackTrace();
@@ -127,30 +143,6 @@ public class Document {
 
     public byte[] getDocumentAsByteArray(){
         return this.cm.getInfoInByteArray();
-    }
-
-    public ChunkManager getDocumentChunkManager(){
-        return this.cm;
-    }
-    /*
-    * Retrieves the DocumentName
-    * */
-    public String getDocumentName(){
-        return this.documentName;
-    }
-
-    /*
-    * Retrieves the Data.Document's Hash
-    * */
-    public String getHash(){
-        return this.cm.getHash();
-    }
-
-    /*
-    * Checks if all the chunks that compose the Data.Document are in Memory
-    * */
-    public boolean isFull(){
-        return this.cm.getFull();
     }
 
     /*

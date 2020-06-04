@@ -53,6 +53,8 @@ public class TransferMultiSender implements Runnable{
     private int consecutiveTimeouts;
     private boolean receivedMissingChunkIDs;
 
+    private TransmitterStats stats;
+
     public TransferMultiSender(String MacAdress, InetAddress destIP, int destUnicastPort, int unicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName, boolean confirmation){
         Random rand = new Random();
 
@@ -81,6 +83,7 @@ public class TransferMultiSender implements Runnable{
         this.consecutiveTimeouts = 0;
         this.receivedMissingChunkIDs = false;
 
+        this.stats = new TransmitterStats();
         try {
             this.unicastPort = unicastPort;
             this.unicastSocket = new DatagramSocket(this.unicastPort);
@@ -93,36 +96,39 @@ public class TransferMultiSender implements Runnable{
         this.TMRI_Lock.lock();
         if(!this.receivedTransferMultiReceiverInfo) {
             this.timeout_Lock.lock();
-            this.consecutiveTimeouts ++;
+            this.consecutiveTimeouts++;
             this.timeout_Lock.unlock();
 
-            TransferMetaInfo tmi;
-            ChunkManagerMetaInfo cmmi = new ChunkManagerMetaInfo(this.cmmi);
+            if (this.consecutiveTimeouts < 13) {
+                TransferMetaInfo tmi;
+                ChunkManagerMetaInfo cmmi = new ChunkManagerMetaInfo(this.cmmi);
 
-            cmmi.missingChunks = null;
-            if (this.DocumentName == null)
-                tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.confirmation);
-            else
-                tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.DocumentName, this.confirmation);
+                cmmi.missingChunks = null;
+                if (this.DocumentName == null)
+                    tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.confirmation);
+                else
+                    tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.DocumentName, this.confirmation);
 
-            byte[] info = getBytesFromObject((Object) tmi);
-            System.out.println("TRANSFERMETAIFO SIZE " + info.length);
+                byte[] info = getBytesFromObject((Object) tmi);
+                System.out.println("TRANSFERMETAIFO SIZE " + info.length);
 
-            DatagramPacket dp = new DatagramPacket(info, info.length, this.destIP, this.destUnicastPort);
+                DatagramPacket dp = new DatagramPacket(info, info.length, this.destIP, this.destUnicastPort);
 
-            int tries = 0;
-            boolean sent = false;
-            while(!sent && tries < 3) {
-                try {
-                    tries++;
-                    this.unicastSocket.send(dp);//!!!!!!!!!!!!!!!!!!!!!!!EXCEPTION!!
-                    sent = true;
-                } catch (IOException e) {
-                    e.printStackTrace();
+                int tries = 0;
+                boolean sent = false;
+                while (!sent && tries < 3) {
+                    try {
+                        tries++;
+                        this.unicastSocket.send(dp);//!!!!!!!!!!!!!!!!!!!!!!!EXCEPTION!!
+                        sent = true;
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    this.TMRI_Lock.unlock();
                 }
-                this.TMRI_Lock.unlock();
+                System.out.println("SENT TRANSFERMETAINFO");
+                this.stats.markTmiSendTime();
             }
-            System.out.println("SENT TRANSFERMETAINFO");
         }
         else{
             this.timeout_Lock.lock();
@@ -138,7 +144,7 @@ public class TransferMultiSender implements Runnable{
 
         if(!this.receivedTransferMultiReceiverInfo){
             this.timeout_Lock.lock();
-            if(this.consecutiveTimeouts >=  3){
+            if(this.consecutiveTimeouts >= 12){
                 this.kill();
                 System.out.println("KILLED DUE TO TIMEOUT");
             }
@@ -147,8 +153,8 @@ public class TransferMultiSender implements Runnable{
         else{
             boolean sending = false;
 
-            for(int i = 0; !sending && i < this.fastSenders.size(); i++)
-                sending = (sending || this.fastSenders.get(i).isRunning());
+            for (FastUnicastSender fastSender : this.fastSenders)
+                sending = (sending || fastSender.isRunning());
 
             System.out.println("SENDING " + sending);
 
@@ -173,7 +179,7 @@ public class TransferMultiSender implements Runnable{
         }
     };
 
-    private void processDatagramPacket(DatagramPacket dp) {
+    private void processDatagramPacket(DatagramPacket dp, long receiveTime) {
 
         Object obj = getObjectFromBytes(dp.getData());
 
@@ -182,13 +188,14 @@ public class TransferMultiSender implements Runnable{
             this.receivedTransferMultiReceiverInfo = true;
             this.TMRI_Lock.unlock();
 
+            this.stats.setTrmiReceiveTime(receiveTime);
+            System.out.println("RTT => " + this.stats.handshakeRTT);
             TransferMultiReceiverInfo tmri = (TransferMultiReceiverInfo) obj;
 
             processTransferMultiReceiverInfo(tmri);
         }
         else{
             if(obj instanceof MissingChunkIDs) {
-                //System.out.println("ITS A MISSINGCHUNKIDS");
                 this.timeout_Lock.lock();
                 this.receivedMissingChunkIDs = true;
                 this.timeout_Lock.unlock();
@@ -216,7 +223,7 @@ public class TransferMultiSender implements Runnable{
         }
         else{
             mc = new ArrayList<Integer>();
-            for(int i = 0; i < cm.getNumberOfChunks(); i++){
+            for(int i = 0; i < cm.mi.numberOfChunks; i++){
                 mc.add(i + Integer.MIN_VALUE);
             }
         }
@@ -258,7 +265,7 @@ public class TransferMultiSender implements Runnable{
         } else {
             //System.out.println("MCID NULL");
             mc = new ArrayList<Integer>();
-            for (int i = 0; i < cm.getNumberOfChunks(); i++) {
+            for (int i = 0; i < cm.mi.numberOfChunks; i++) {
                 mc.add(i);
             }
         }
@@ -282,15 +289,13 @@ public class TransferMultiSender implements Runnable{
                     split = mc.size();
                 else
                     split = chunksPerSender * (i + 1);
-
                 fus = this.fastSenders.get(i);
                 fus.changeDPS(mcids.DatagramsPerSecondPerSender);
                 isRunning = fus.addChunksToSend(copyArrayListSection(mc, chunksPerSender * i, split));
-                //System.out.println("ADDED MISSING CHUNKS TO SEND LIST");
                 if (!isRunning) {
                     t = new Thread(fus);
                     t.start();
-                    //System.out.println("WASN'T RUNNING");
+                    System.out.println("WASN'T RUNNING");
                 }
             }
         }
@@ -319,7 +324,7 @@ public class TransferMultiSender implements Runnable{
 
     public void run (){
         try {
-            this.transferMetaInfoSES.scheduleWithFixedDelay(sendTransferMetaInfo, 0, 10, TimeUnit.SECONDS);
+            this.transferMetaInfoSES.scheduleWithFixedDelay(sendTransferMetaInfo, 0, 5, TimeUnit.SECONDS);
             this.timeoutSES.scheduleWithFixedDelay(updateTimeoutStatus, 0, 2, TimeUnit.SECONDS);
             byte[] buf;
             DatagramPacket dp;
@@ -330,7 +335,7 @@ public class TransferMultiSender implements Runnable{
                 this.unicastSocket.receive(dp);
 
                 System.out.println("RECEIVED SOMETHING FROM " + dp.getAddress());
-                processDatagramPacket(dp);
+                processDatagramPacket(dp, System.currentTimeMillis());
             }
 
         }

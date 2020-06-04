@@ -47,7 +47,9 @@ public class ReceiverStats {
     public long transferEndTime;
     public long bytesReceived;
 
-    public ReceiverStats(int averageDPSize){
+    public int dps;
+
+    public ReceiverStats(int averageDPSize, int dps){
         this.averageDPSize = averageDPSize;
 
         this.protocolStartTime = 0;
@@ -74,6 +76,8 @@ public class ReceiverStats {
         this.MCIDsSendTime = new ArrayList<Long>();
         this.firstRetransmittedCMReceiveTime = new ArrayList<Long>();
         this.retransmissionRTT = new ArrayList<Integer>();
+
+        this.dps = dps;
 
     }
 
@@ -240,6 +244,9 @@ public class ReceiverStats {
         return this.transferCycleStartTime.size();
     }
 
+    public void setDPS(int dps){
+        this.dps = dps;
+    }
     public void printStats(){
         System.out.println("Drop % => " + dropPercentage() + "%");
         System.out.println("Handshake RTT => " + this.handshakeRTT + " ms");

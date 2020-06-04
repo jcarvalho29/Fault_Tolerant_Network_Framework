@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReentrantLock;
 
+import Messages.ChunkMessage;
 import org.apache.commons.io.FileUtils;
 
 
@@ -19,7 +20,7 @@ public class ChunkManager {
     */
     private String Root;
 
-    private ChunkManagerMetaInfo mi;
+    public ChunkManagerMetaInfo mi;
     private ReentrantLock mi_Lock;
     private ReentrantLock missingChunks_Lock;
 
@@ -99,7 +100,7 @@ public class ChunkManager {
         this.mi.numberOfChunksInArray = 0;
         this.mi.chunksSize = info.length;
 
-        ArrayList <Chunk> chunks = createChunks(splitInfoIntoArrays(info), this.mi.numberOfChunks);
+        Chunk[] chunks = createChunks(splitInfoIntoArrays(info), this.mi.numberOfChunks, this.mi.numberOfChunks);
 
         this.mi.HashAlgoritm = hashAlgorithm;
         this.mi.Hash = hash_Chunks(chunks, hashAlgorithm);
@@ -240,30 +241,32 @@ public class ChunkManager {
         Hash h = new Hash(this.mi.HashAlgoritm);
         try {
             FileInputStream fis = new FileInputStream(localFilePath);
-
+            BufferedInputStream bis = new BufferedInputStream(fis, 64*1024);
             int i = 0;
             int read = 1;
             long readlimit;
-            ArrayList<byte[]> info = new ArrayList<byte[]>();
+            byte[][] info = new byte[Math.min(maxChunksLoadedAtaTime, this.mi.numberOfChunks)][];
             byte[] buffer;
-            ArrayList<Chunk> Chunks;
+            Chunk[] Chunks;
 
+            int j;
             while(i < this.mi.numberOfChunks){
-
-                for(int j = 0; j < maxChunksLoadedAtaTime && i < this.mi.numberOfChunks && read != 0; i++, j++){
+                j = 0;
+                for(; j < maxChunksLoadedAtaTime && i < this.mi.numberOfChunks && read != 0; i++, j++){
                     if(i == this.mi.numberOfChunks-1)
                         readlimit = this.mi.chunksSize - this.mi.datagramMaxSize * i;
                     else
                         readlimit = this.mi.datagramMaxSize;
                     buffer = new byte[(int) readlimit];
-                    read = fis.read(buffer);
+                    read = bis.read(buffer);
                     h.updateHash(buffer);
-                    info.add(buffer);
+                    info[j] = buffer;
                 }
-                Chunks = createChunks(info, i);
-                info.clear();
+                Chunks = createChunks(info, j, i);
                 writeChunksToFolder(Chunks);
             }
+            bis.close();
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -275,8 +278,8 @@ public class ChunkManager {
     * This will split a byte[] into multiple byte[] based on the mi.datagramMaxSize
     * Returns a ArrayList with the corresponding byte[]
     * */
-    private ArrayList <byte[]> splitInfoIntoArrays(byte[] info){
-        ArrayList<byte[]> splits = new ArrayList<byte[]>();
+    private byte[][] splitInfoIntoArrays(byte[] info){
+        byte[][] splits = new byte[this.mi.numberOfChunks][];
 
         int i = 0;
         long readlimit;
@@ -288,7 +291,7 @@ public class ChunkManager {
                 readlimit = this.mi.datagramMaxSize * (i + 1);
 
             //System.out.println("READ FROM " + this.mi.datagramMaxSize * i + " TO " + readlimit + "( " + this.mi.chunksSize +  " )");
-            splits.add(Arrays.copyOfRange(info, this.mi.datagramMaxSize * i, (int) readlimit));
+            splits[i] = Arrays.copyOfRange(info, this.mi.datagramMaxSize * i, (int) readlimit);
             i++;
         }
 
@@ -300,9 +303,9 @@ public class ChunkManager {
     *   FileChunk[] fcs => Array of FileChunks to be written
     *   int size => Size of the FileChunk Array
     */
-    private void writeChunksToFolder(ArrayList <Chunk> fcs){
+    private void writeChunksToFolder(Chunk[] chunks){
         int i;
-        int size = fcs.size();
+        int size = chunks.length;
 
         String folderPath = this.Root + this.mi.Hash + "/Chunks/";
         File ficheiro = new File(folderPath);
@@ -314,7 +317,7 @@ public class ChunkManager {
         Path file;
         for(i = 0; i < size; i++){
             try {
-                Chunk fc = fcs.get(i);
+                Chunk fc = chunks[i];
                 path = folderPath + fc.place + ".chunk";
                 filePointer = new File(path);
 
@@ -408,20 +411,8 @@ public class ChunkManager {
     * calls writeFileChunksToFolder to write the new Filechunks, and updates the MetaInfo File
     *   ArrayList<FileChunk> fcs => Newly received Filechunks to be written
     */
-    public boolean addChunks (ArrayList<Chunk> chunks){
+    public boolean addChunks (ChunkMessage[] chunkMessages){
 
-        int chunk_size = chunks.size();
-        int totalNumberOfChunks = this.mi.numberOfChunks;
-
-        //DEBUG!!!!!!!!!!!!!!!!!!
-        if(chunk_size == 0){
-            System.out.println("            SAY WHATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
-            try {
-                Thread.sleep(10000000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
 
         /*if(numberOfMissingChunks > chunk_size) {
 
@@ -465,18 +456,19 @@ public class ChunkManager {
 
         }
         else{*/
-
+        int totalNumberOfChunks = this.mi.numberOfChunks;
         boolean[] missingc = new boolean[totalNumberOfChunks];
-        missingc[0] = true;
 
+        //fill with true
+        missingc[0] = true;
         for (int i = 1; i < totalNumberOfChunks; i += i)
             System.arraycopy(missingc, 0, missingc, i, Math.min((totalNumberOfChunks - i), i));
 
         this.mi_Lock.lock();
-            for (Chunk c : chunks) {
-                missingc[c.place - Integer.MIN_VALUE] = false;
+            for (ChunkMessage cm : chunkMessages) {
+                missingc[cm.chunk.place - Integer.MIN_VALUE] = false;
                 this.mi.numberOfChunksInArray++;
-                this.mi.chunksSize += c.Chunk.length;
+                this.mi.chunksSize += cm.chunk.Chunk.length;
             }
         this.mi_Lock.unlock();
 
@@ -497,6 +489,10 @@ public class ChunkManager {
             //System.out.println("            Inside Writing THREAD");
 
             //long beforeWriting = System.currentTimeMillis();
+            Chunk[] chunks = new Chunk[chunkMessages.length];
+            for(int i = 0; i < chunks.length; i++)
+                chunks[i] = chunkMessages[i].chunk;
+
             writeChunksToFolder(chunks);
             //long afterWriting = System.currentTimeMillis();
 
@@ -509,16 +505,16 @@ public class ChunkManager {
     /*
     * Receiving a ArrayList of Byte Arrays, this function creates all the corresponding FileChunks
     *   ArrayList<byte[]> fileAsBytesChunks => A ArrayList that contains Byte[] that contain information
-    *   id => ID of the first Filechunk of the arraylist
+    *   id => ID of the last Filechunk of the arraylist
     * */
-    private ArrayList<Chunk> createChunks(ArrayList<byte[]> fileAsBytesChunks, int id){
-        int noc = fileAsBytesChunks.size();
+    private Chunk[] createChunks(byte[][] fileAsBytesChunks, int maxindex, int id){
+        int noc = maxindex;
         int fcID = id - noc + Integer.MIN_VALUE;
 
-        ArrayList <Chunk> res = new ArrayList<Chunk>();
+        Chunk[] res = new Chunk[maxindex];
 
         for (int i = 0; i < noc; i++) {
-            res.add(new Chunk(fileAsBytesChunks.get(i), fcID++));
+            res[i] = new Chunk(fileAsBytesChunks[i], fcID++);
         }
         return res;
     }
@@ -841,13 +837,6 @@ public class ChunkManager {
     }
 
     /*
-    * Retrieves The Flag full that indicates if all the FileChunks are present
-    */
-    public boolean getFull(){
-        return this.mi.full;
-    }
-
-    /*
     * Retrieves the amount of Missing Filechunks
     */
     public int getNumberOfMissingChunks(){
@@ -860,30 +849,9 @@ public class ChunkManager {
     }
 
     /*
-     * Retrieves the total number of total Chunks this Information is divided into
-     * */
-    public int getNumberOfChunks(){
-        return this.mi.numberOfChunks;
-    }
-
-    /*
-    * Retrieves the amount of Memory that the Filechunks of this File are taking. (Only the ones that are present on the current Node)
-    */
-    public long getChunksSize(){
-        return this.mi.chunksSize;
-    }
-
-    /*
-    * Retrieves the sha_256 Hash form the Information of this Data.ChunkManager
-    * */
-    public String getHash(){
-        return this.mi.Hash;
-    }
-
-    /*
     * Calculates the hash of the provided ArrayList<Chunk>
     * */
-    private String hash_Chunks(ArrayList<Chunk> chunks, String alg){
+    private String hash_Chunks(Chunk[] chunks, String alg){
         Hash h = new Hash(alg);
 
         for(Chunk c : chunks) {
@@ -909,7 +877,7 @@ public class ChunkManager {
     /*
      * Checks if the provided ArrayList<Chunk> hash matches the provided hash
      * */
-    public boolean checkHash_Chunks(ArrayList<Chunk> chunks, String hash, String alg){
+    public boolean checkHash_Chunks(Chunk[] chunks, String hash, String alg){
         return hash.equals(hash_Chunks(chunks, alg));
     }
 

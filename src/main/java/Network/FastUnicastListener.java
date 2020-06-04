@@ -1,6 +1,5 @@
 package Network;
 
-import Data.Chunk;
 import Messages.ChunkMessage;
 
 import java.io.*;
@@ -16,31 +15,42 @@ public class FastUnicastListener implements Runnable {
     private DatagramSocket ds;
     public int port;
     private int MTU;
+    private int dps;
 
-    private ArrayList<Chunk> fc;
-    private ArrayList<byte[]> bytes;
-
-    private ReentrantLock lock;
+    private ArrayList<byte[][]> Overflow;
+    private byte[][] byteArrays;
+    private int byteArraysSize;
+    private int pointer;
+    private int receivedCM;
+    private ReentrantLock arrayLock;
 
     private boolean run;
 
     private long firstReceivedCM;
     private boolean frcmFlag;
 
-    public FastUnicastListener(int MTU){
+    public FastUnicastListener(int MTU, int dps){
+
+        this.run = true;
 
         this.firstReceivedCM = Long.MAX_VALUE;
         this.frcmFlag = false;
 
         this.port = -1;
         this.MTU = MTU;
-        boolean b = true;
-        this.run = true;
-        this.lock = new ReentrantLock();
-        this.fc = new ArrayList<Chunk>();
-        this.bytes = new ArrayList<byte[]>();
+        this.dps = dps;
+
+        this.arrayLock = new ReentrantLock();
+
+        this.Overflow = new ArrayList<byte[][]>();
+        //0.55 = 1.1 (10% maior) * 0.5 (primeiro sleep é de 0.5 segundos)
+        this.byteArraysSize = (int) (this.dps* 0.55);
+        this.byteArrays = new byte[this.byteArraysSize][];
+        this.pointer = 0;
+        this.receivedCM = 0;
 
         Random rand = new Random();
+        boolean b = true;
         while(b) {
             try {
                 this.port = rand.nextInt(60000) + 5000;
@@ -74,9 +84,25 @@ public class FastUnicastListener implements Runnable {
                     this.firstReceivedCM = System.currentTimeMillis();
                 }
 
-                this.lock.lock();
-                this.bytes.add(dp.getData());
-                this.lock.unlock();
+                this.arrayLock.lock();
+                if(this.pointer == this.byteArraysSize){
+
+                    byte[][] copy = new byte[this.byteArraysSize][];
+                    System.arraycopy(this.byteArrays, 0, copy, 0, this.byteArraysSize);
+                    this.Overflow.add(copy);
+                    copy = null;
+/*
+                    this.byteArrays[0] = null;
+                    for (int i = 1; i < this.byteArraysSize; i += i)
+                        System.arraycopy(this.byteArrays, 0, this.byteArrays, i, Math.min((this.byteArraysSize - i), i));*/
+
+                    this.pointer = 0;
+                }
+                this.byteArrays[this.pointer] = dp.getData();
+                this.pointer++;
+                this.receivedCM++;
+
+                this.arrayLock.unlock();
 
             }
         }
@@ -88,28 +114,85 @@ public class FastUnicastListener implements Runnable {
         }
     }
 
-    public ArrayList<ChunkMessage> getChunkHeaders() {
-        this.lock.lock();
+    public ChunkMessage[] getChunkHeaders() {
+        ArrayList<byte[][]> overflowCopy = null;
+        int pointerCopy = 0;
+        int receivedCMCopy = 0;
 
-        ArrayList<byte[]> b = new ArrayList<byte[]>(this.bytes);
-        this.bytes.clear();
-        this.lock.unlock();
+        this.arrayLock.lock();
+        receivedCMCopy = this.receivedCM;
+        this.receivedCM = 0;
 
-        ArrayList<ChunkMessage> cPointer = new ArrayList<ChunkMessage>();
+        byte[][] objects = new byte[receivedCMCopy][];
 
-        Object o;
-        for(byte[] dpBytes : b){
-            o = getObjectFromBytes(dpBytes);
-            if(o instanceof ChunkMessage){
-                cPointer.add((ChunkMessage) o);
+        if(this.Overflow.size() > 0) {
+            overflowCopy = new ArrayList<byte[][]>(this.Overflow);
+            this.Overflow.clear();
+        }
+
+        if(pointer != 0) {
+            pointerCopy = this.pointer;
+            System.arraycopy(this.byteArrays, 0, objects, 0, this.pointer);
+            this.pointer = 0;
+
+        }
+        this.arrayLock.unlock();
+
+        if(overflowCopy != null) {
+            for (byte[][] b : overflowCopy) {
+                System.arraycopy(b, 0, objects, objects.length, b.length);
+            }
+        }
+
+        ChunkMessage[] cms = new ChunkMessage[objects.length];
+
+        for(int i = 0; i < objects.length; i++){
+            cms[i] = (ChunkMessage) getObjectFromBytes(objects[i]);
+        }
+
+        return cms;
+
+        /*Object o;
+        if(overflowCopy != null) {
+            if(pointerCopy != 0)
+                overflowCopy.add(byteArraysCopy);
+            for (byte[][] byteArrays : overflowCopy)
+                for(int i = 0; i < pointerCopy; i++){
+                    o = getObjectFromBytes(byteArrays[i]);
+                    if(o instanceof ChunkMessage)
+                        cPointer.add((ChunkMessage) o);
+                }
+        }
+        else{
+            for (int i = 0; i < pointerCopy; i++) {
+                o = getObjectFromBytes(byteArraysCopy[i]);
+                if (o instanceof ChunkMessage)
+                    cPointer.add((ChunkMessage) o);
             }
         }
 
         //System.out.println("GOT " + cPointer.size() + " CHUNKS");
-        return cPointer;
+        return cPointer;*/
     }
 
+    private void changeByteArraysSize(int rtt){
+        //500 = 2/1000
+        int newByteArraysSize = ((this.dps * rtt)/500);
 
+        this.arrayLock.lock();
+        if(this.pointer != 0){
+            byte[][] byteArraysCopy = new byte[this.pointer][];
+
+            System.arraycopy(this.byteArrays, 0, byteArraysCopy, 0, this.pointer);
+
+            this.byteArrays = new byte[newByteArraysSize][];
+            this.byteArraysSize = newByteArraysSize;
+            this.pointer = 0;
+
+            this.Overflow.add(byteArraysCopy);
+        }
+        this.arrayLock.unlock();
+    }
 
     public long getFirstCMReceivedTimestamp(){
         if(this.frcmFlag) {

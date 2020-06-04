@@ -1,5 +1,7 @@
 package Data;
 
+import Messages.ChunkMessage;
+
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,7 +79,7 @@ public class DataManager {
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
         Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, hashAlgorithm);
-        hash = f.getHash();
+        hash = f.cm.mi.Hash;
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
             registerHash(hash);
@@ -104,7 +106,7 @@ public class DataManager {
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
         Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, "SHA-256");
-        hash = f.getHash();
+        hash = f.cm.mi.Hash;
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
             registerHash(hash);
@@ -140,7 +142,7 @@ public class DataManager {
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
         Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, hashAlgorithm,maxChunksLoadedAtaTime);
-        hash = f.getHash();
+        hash = f.cm.mi.Hash;
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
             registerHash(hash);
@@ -167,7 +169,7 @@ public class DataManager {
         localDocumentPath = folderPathNormalizer(localDocumentPath);
 
         Document f = new Document(this.dmMI.Root, localDocumentPath, documentName, maxDatagramSize, "SHA-256",maxChunksLoadedAtaTime);
-        hash = f.getHash();
+        hash = f.cm.mi.Hash;
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
             registerHash(hash);
@@ -235,7 +237,7 @@ public class DataManager {
     * Adds the provided chunks to the Document that the provided MacAddress/Hash identify. This is intended to be used with the
     * Documents that are being received and not all chunks are present in Memory.
     * */
-    private boolean addChunksToDocument (String hash, ArrayList<Chunk> chunks){
+    private boolean addChunksToDocument (String hash, ChunkMessage[] chunks){
         Document f;
         boolean full = false;
 
@@ -323,7 +325,7 @@ public class DataManager {
         String hash = null;
 
         ChunkManager cm = new ChunkManager(this.dmMI.Root, info, maxDatagramSize, hashAlgorithm);
-        hash = cm.getHash();
+        hash = cm.mi.Hash;
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
 
@@ -333,7 +335,7 @@ public class DataManager {
             this.messages.put(hash, cm);
 
             //assinala que a mensagem esta completa
-            this.dmMI.isMessageFull.put(cm.getHash(), true);
+            this.dmMI.isMessageFull.put(cm.mi.Hash, true);
 
             updateDataManagerMetaInfoFile();
         }
@@ -343,7 +345,7 @@ public class DataManager {
     public String newMessage(byte[] info, int maxDatagramSize){
         String hash = null;
         ChunkManager cm = new ChunkManager(this.dmMI.Root, info, maxDatagramSize, "SHA-256");
-        hash = cm.getHash();
+        hash = cm.mi.Hash;
 
         if(!(this.dmMI.cmHashs.contains(hash))) {
 
@@ -353,7 +355,7 @@ public class DataManager {
             this.messages.put(hash, cm);
 
             //assinala que a mensagem esta completa
-            this.dmMI.isMessageFull.put(cm.getHash(), true);
+            this.dmMI.isMessageFull.put(cm.mi.Hash, true);
 
             updateDataManagerMetaInfoFile();
         }
@@ -402,14 +404,14 @@ public class DataManager {
      * Adds the provided chunks to the ChunkManager that the provided MacAddress/Hash identify. This is intended to be used with the
      * ChunkManager that are being received and not all chunks are present in Memory.
      * */
-    private boolean addChunksToMessage(String Hash, ArrayList<Chunk> chunks){
+    private boolean addChunksToMessage(String Hash, ChunkMessage[] chunks){
         ChunkManager cm;
         boolean full = false;
 
         if ((this.dmMI.cmHashs.contains(Hash)) && (!this.dmMI.isMessageFull.get(Hash))){
             cm = this.messages.get(Hash);
             full = cm.addChunks(chunks);
-            if(cm.getFull())
+            if(cm.mi.full)
                 this.dmMI.isMessageFull.put(Hash, true);
             this.messages.put(Hash, cm); //???????? PReciso????
         }
@@ -421,11 +423,11 @@ public class DataManager {
     /*
     * Tries to add the specified chunks to a ChunkManager defined by the provided Hash
     * */
-    public boolean addChunks(String Hash, ArrayList<Chunk> chunks) {
+    public boolean addChunks(String Hash, ChunkMessage[] chunks) {
         boolean full = false;
         if (this.documents.containsKey(Hash)) {
             full = addChunksToDocument(Hash, chunks);
-            System.out.println(chunks.size() + " CHUNKS ADDED");
+            System.out.println(chunks.length + " CHUNKS ADDED");
         }
         else {
             if (this.messages.containsKey(Hash)) {

@@ -109,7 +109,7 @@ public class Main{
 
                     case 4: {
                         ChunkManager cm = dm.documents.get(docHash).cm;
-                        startSender(MacAddress,3333, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).getDocumentName());
+                        startSender(MacAddress,3333, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).documentName);
                         break;
                     }
 

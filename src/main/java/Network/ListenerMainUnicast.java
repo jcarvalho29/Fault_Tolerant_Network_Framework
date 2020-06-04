@@ -83,7 +83,7 @@ public class ListenerMainUnicast implements Runnable{
                 }
 
 
-                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 10);
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 20);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
                 this.infoReceiverManager.put(tmi.ID, trm);
