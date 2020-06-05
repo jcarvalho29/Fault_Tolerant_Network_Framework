@@ -25,6 +25,7 @@ public class TransferReceiverManager implements Runnable{
     private DatagramSocket unicastSocket;
 
     private int MTU;
+    private int NICCapacity;
 
     private long receivedDPDuringCycle;
     private ArrayList<FastUnicastListener> fastListeners;
@@ -42,18 +43,19 @@ public class TransferReceiverManager implements Runnable{
     private int consecutiveTimeouts;
     private boolean run = true;
 
-    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress destIP, int destPort, TransferMetaInfo tmi, int MTU, int numberOfListeners){
+    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress destIP, int destPort, TransferMetaInfo tmi, int MTU, int NICCapacity, int numberOfListeners){
         this.FastReceiversSES = Executors.newSingleThreadScheduledExecutor();
 
         this.mainListener = ml;
         this.dm = dm;
-        this.stats = new ReceiverStats(MTU-100, 5000);
+        this.stats = new ReceiverStats(MTU, NICCapacity, numberOfListeners, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
 
         this.destIP = destIP;
         this.destPort = destPort;
         this.tmi = tmi;
 
         this.MTU = MTU;
+        this.NICCapacity = NICCapacity;
         this.numberOfListeners = numberOfListeners;
 
         this.receivedDPDuringCycle = 0;
@@ -88,7 +90,8 @@ public class TransferReceiverManager implements Runnable{
 
         for(int i = 0; i < numberOfListeners; i++){
 
-            fus = new FastUnicastListener(this.MTU,this.stats.dps);
+            fus = new FastUnicastListener(this.MTU, this.stats.getDPS());
+            System.out.println("CREATED FASUNICAST WITH DPS AT " + this.stats.getDPS());
             Thread t = new Thread(fus);
 
             t.start();
@@ -135,17 +138,17 @@ public class TransferReceiverManager implements Runnable{
         ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.7));
 
         if(cmcIDs == null) {
-            System.out.println("Sending CMCID NULL");
-            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, this.stats.dps, null);
+            System.out.println("Sending CMCID NULL WITH DPS " + this.stats.getDPS());
+            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, this.stats.getDPS(), null);
         }
         else {
-            System.out.println("SENDING CMCID WITH IDs");
-            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, this.stats.dps, cmcIDs.get(0));
+            System.out.println("SENDING CMCID WITH IDs WITH DPS " + this.stats.getDPS());
+            this.tmri = new TransferMultiReceiverInfo(this.tmi.ID, listenerPorts, this.stats.getDPS(), cmcIDs.get(0));
         }
 
         for (int i = 1; cmcIDs != null && i < cmcIDs.size(); i++){
             ////////!!!!!!!!!!!!! MUDIFICAR O DPS PARA EFIETO DE FEEDBACK NO CONTROLO DE FLUXO
-            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), this.stats.dps);
+            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), this.stats.getDPS());
             this.missingChunksIDS.add(mcID);
         }
     }
@@ -163,12 +166,15 @@ public class TransferReceiverManager implements Runnable{
             System.out.println("MAX => " + this.MTU*0.85 + " ACTUAL SIZE => " + teste.length);
         }
 
+
         ////////!!!!!!!!!!!!! MUDIFICAR O DPS PARA EFIETO DE FEEDBACK NO CONTROLO DE FLUXO
         //retirei a confirmação de null
+        int dps = this.stats.getDPS();
         for (int i = 0; i < cmcIDs.size(); i++){
-            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), this.stats.dps);
+            mcID = new MissingChunkIDs(this.tmi.ID, cmcIDs.get(i), dps);
             mcIDs.add(mcID);
         }
+        System.out.println("MISSINGCHUNKIDS WITH DPS " + dps);
 
         byte[] data;
         DatagramPacket dp;
@@ -204,6 +210,11 @@ public class TransferReceiverManager implements Runnable{
             System.out.println("                NOT THE CYCLE");
 
             this.stats.markFirstRetransmittedCMReceivedTime(min);
+
+            int avgRTT = this.stats.getAverageRTT();
+            int dps = this.stats.getDPS();
+            for(FastUnicastListener ful: this.fastListeners)
+                ful.changeByteArraysSize(avgRTT, dps);
         }
         else{
             for(FastUnicastListener fus : this.fastListeners)
@@ -222,6 +233,8 @@ public class TransferReceiverManager implements Runnable{
             this.stats.registerDPExpectedInCycle(this.dm.documents.get(this.tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
             //System.out.println("Registered the expected CM for the next cycle");
         }
+
+        this.stats.calculateDPS();
 
         this.stats.markTransferCycleEnding();
         this.stats.markTransferCycleBeginning();
@@ -434,8 +447,8 @@ public class TransferReceiverManager implements Runnable{
             ChunkMessage[] chunkHeaders;
 
             receivedChunkMessages = 0;
-            for (FastUnicastListener fus : this.fastListeners) {
-                chunkHeaders = fus.getChunkHeaders();
+            for (FastUnicastListener ful : this.fastListeners) {
+                chunkHeaders = ful.getChunkHeaders();
                 receivedChunkMessages += chunkHeaders.length;
                 chunksReceived.add(chunkHeaders);
             }
@@ -456,14 +469,20 @@ public class TransferReceiverManager implements Runnable{
                     isFirstCycle = false;
                     long min = Long.MAX_VALUE;
                     long receiveTime;
-                    for(FastUnicastListener fus : this.fastListeners){
-                        receiveTime = fus.getFirstCMReceivedTimestamp();
+                    for(FastUnicastListener ful : this.fastListeners){
+                        receiveTime = ful.getFirstCMReceivedTimestamp();
                         if (min > receiveTime) {
                             min = receiveTime;
                         }
                     }
                     this.stats.setFirstChunkReceivedTime(min);
                     this.stats.setTransferCycleBeginning(min);
+
+
+                    int avgRTT = this.stats.getAverageRTT();
+                    int dps = this.stats.getDPS();
+                    for(FastUnicastListener ful: this.fastListeners)
+                        ful.changeByteArraysSize(avgRTT, dps);
                 }
 
                 this.TransferMultiReceiverInfoReceived = true;
@@ -476,7 +495,7 @@ public class TransferReceiverManager implements Runnable{
                     System.out.println("TRANSFER DONE");
                     updateCycleStats();
                     sendOver(false);
-                    this.dm.changeIsDocumentFullEntry(this.tmi.cmmi.Hash, true);
+                    this.dm.changeIsFullEntry(this.tmi.cmmi.Hash, true);
                     this.kill();
                 }
             }

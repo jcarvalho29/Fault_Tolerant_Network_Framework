@@ -675,11 +675,19 @@ public class DataManager {
 
     }
 
-    public void changeIsDocumentFullEntry(String Hash, boolean full){
-        this.dmMI.isDocumentFull.remove(Hash);
-        this.dmMI.isDocumentFull.put(Hash, full);
+    public void changeIsFullEntry(String Hash, boolean full){
 
-        updateDataManagerMetaInfoFile();
+        if(this.dmMI.isDocumentFull.containsKey(Hash)) {
+            this.dmMI.isDocumentFull.remove(Hash);
+            this.dmMI.isDocumentFull.put(Hash, full);
+            updateDataManagerMetaInfoFile();
+        }
+        else
+            if(this.dmMI.isMessageFull.containsKey(Hash)){
+                this.dmMI.isMessageFull.remove(Hash);
+                this.dmMI.isMessageFull.put(Hash, full);
+                updateDataManagerMetaInfoFile();
+            }
     }
 
     public boolean isChunkManagerFull(String Hash) {

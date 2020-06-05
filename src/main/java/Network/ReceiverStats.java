@@ -5,6 +5,11 @@ import java.util.Date;
 
 public class ReceiverStats {
 
+    private int MTU;
+    private int NICCapacity;
+    private int numberOfListeners;
+    private long numberOfMissingChunks;
+
     private final int averageDPSize;
     // Receptor => medido entre o envio do TMRI e a chegada do primeiro ChunkMessage
     private long trmiSendTime;
@@ -47,10 +52,15 @@ public class ReceiverStats {
     public long transferEndTime;
     public long bytesReceived;
 
-    public int dps;
+    public ArrayList<Integer> dpsPerCycle;
 
-    public ReceiverStats(int averageDPSize, int dps){
-        this.averageDPSize = averageDPSize;
+    public ReceiverStats(int MTU, int NICCapacity, int numberOfListeners, int numberOfMissingChunks){
+        this.MTU = MTU;
+        this.NICCapacity = NICCapacity;
+        this.numberOfListeners = numberOfListeners;
+        this.numberOfMissingChunks = numberOfMissingChunks;
+
+        this.averageDPSize = MTU - 100;
 
         this.protocolStartTime = 0;
         this.protocolEndTime = 0;
@@ -77,7 +87,8 @@ public class ReceiverStats {
         this.firstRetransmittedCMReceiveTime = new ArrayList<Long>();
         this.retransmissionRTT = new ArrayList<Integer>();
 
-        this.dps = dps;
+        this.dpsPerCycle = new ArrayList<Integer>();
+        calculateDPS();
 
     }
 
@@ -181,6 +192,7 @@ public class ReceiverStats {
     public void registerDPReceivedInCycle(long numDP){
         this.dpReceived_PerTransferCycle.add(numDP);
         addToDPReceived(numDP);
+        updateMissingChunks(numDP);
 
         long dropped = this.dpExpected_PerTransferCycle.get(this.dpExpected_PerTransferCycle.size()-1) - numDP;
         this.drops_PerTransferCycle.add(((float) dropped / (float) this.dpExpected_PerTransferCycle.get(this.dpExpected_PerTransferCycle.size()-1)) * 100);
@@ -244,8 +256,30 @@ public class ReceiverStats {
         return this.transferCycleStartTime.size();
     }
 
-    public void setDPS(int dps){
-        this.dps = dps;
+    public int calculateDPS(){
+        System.out.println("                    CALCULATING DPS");
+        int capacityInDPS = ((this.NICCapacity*1000000)/(this.averageDPSize*8));
+        System.out.println("                    " + this.NICCapacity*1000000 + " / " + (this.averageDPSize*8) + " = " + capacityInDPS);
+
+        int maxDPSPerListener = Math.min(capacityInDPS/this.numberOfListeners, 5000);
+        maxDPSPerListener = Math.max(maxDPSPerListener, 1);
+
+        if(this.numberOfMissingChunks/maxDPSPerListener > 20) {
+            System.out.println("                    Multipliquei por 0.85");
+            maxDPSPerListener *= .85;
+        }
+
+        //aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
+        this.dpsPerCycle.add(maxDPSPerListener);
+
+        return maxDPSPerListener;
+    }
+
+    public int getDPS(){
+        return this.dpsPerCycle.get(this.dpsPerCycle.size()-1);
+    }
+    private void updateMissingChunks(long receivedChunks){
+        this.numberOfMissingChunks -= receivedChunks;
     }
     public void printStats(){
         System.out.println("Drop % => " + dropPercentage() + "%");
@@ -259,7 +293,7 @@ public class ReceiverStats {
         System.out.println("Drops per Transfer Cycle:");
 
         for(int i = 0; i < this.transferCycleEndTime.size(); i++){
-            System.out.println("    Cycle " + i + ")\n      Duration => " + this.transferCyclesDuration.get(i) + " ms \n        Chunks Received => " + this.dpReceived_PerTransferCycle.get(i) + " / " + this.dpExpected_PerTransferCycle.get(i) + "( " + this.drops_PerTransferCycle.get(i) + " %)");
+            System.out.println("    Cycle " + i + ")\n      Duration => " + this.transferCyclesDuration.get(i) + " ms \n        Chunks Received => " + this.dpReceived_PerTransferCycle.get(i) + " / " + this.dpExpected_PerTransferCycle.get(i) + "( " + this.drops_PerTransferCycle.get(i) + " %)\n       DPS => " + this.dpsPerCycle.get(i));
         }
     }
 }

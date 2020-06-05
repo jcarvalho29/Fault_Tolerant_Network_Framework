@@ -19,6 +19,7 @@ public class ListenerMainUnicast implements Runnable{
     private String ip;
     private int unicastPort;
     private int MTU;
+    private int NICCapacity;
 
     private HashMap<Integer, TransferReceiverManager> infoReceiverManager;
 
@@ -27,12 +28,13 @@ public class ListenerMainUnicast implements Runnable{
 
     private ArrayList<Integer> receivedIDs;
 
-    public ListenerMainUnicast(DataManager dm, String ip, int unicastPort, int MTU){
+    public ListenerMainUnicast(DataManager dm, String ip, int unicastPort, int MTU, int NICCapacity){
 
         this.dm = dm;
         this.ip = ip;
         this.unicastPort = unicastPort;
         this.MTU = MTU;
+        this.NICCapacity = NICCapacity;
 
         this.receivedIDs = new ArrayList<Integer>();
 
@@ -83,7 +85,7 @@ public class ListenerMainUnicast implements Runnable{
                 }
 
 
-                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, 20);
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, this.NICCapacity,20);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
                 this.infoReceiverManager.put(tmi.ID, trm);

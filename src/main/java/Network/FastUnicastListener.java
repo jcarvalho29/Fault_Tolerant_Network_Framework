@@ -124,6 +124,7 @@ public class FastUnicastListener implements Runnable {
         this.receivedCM = 0;
 
         byte[][] objects = new byte[receivedCMCopy][];
+        int cmInObjectsArrayCopy = 0;
 
         if(this.Overflow.size() > 0) {
             overflowCopy = new ArrayList<byte[][]>(this.Overflow);
@@ -132,7 +133,8 @@ public class FastUnicastListener implements Runnable {
 
         if(pointer != 0) {
             pointerCopy = this.pointer;
-            System.arraycopy(this.byteArrays, 0, objects, 0, this.pointer);
+            System.arraycopy(this.byteArrays, 0, objects, cmInObjectsArrayCopy, this.pointer);
+            cmInObjectsArrayCopy += this.pointer;
             this.pointer = 0;
 
         }
@@ -140,7 +142,8 @@ public class FastUnicastListener implements Runnable {
 
         if(overflowCopy != null) {
             for (byte[][] b : overflowCopy) {
-                System.arraycopy(b, 0, objects, objects.length, b.length);
+                System.arraycopy(b, 0, objects, cmInObjectsArrayCopy, b.length);
+                cmInObjectsArrayCopy += b.length;
             }
         }
 
@@ -175,17 +178,18 @@ public class FastUnicastListener implements Runnable {
         return cPointer;*/
     }
 
-    private void changeByteArraysSize(int rtt){
+    public void changeByteArraysSize(int rtt, int dps){
         //500 = 2/1000
-        int newByteArraysSize = ((this.dps * rtt)/500);
-
+        int newByteArraysSize = ((dps * rtt)/500);
+        byte[][] tmp = new byte[newByteArraysSize][];
         this.arrayLock.lock();
+
         if(this.pointer != 0){
             byte[][] byteArraysCopy = new byte[this.pointer][];
 
             System.arraycopy(this.byteArrays, 0, byteArraysCopy, 0, this.pointer);
 
-            this.byteArrays = new byte[newByteArraysSize][];
+            this.byteArrays = tmp;
             this.byteArraysSize = newByteArraysSize;
             this.pointer = 0;
 

@@ -28,6 +28,7 @@ public class Main{
         for (NetworkInterface netint : Collections.list(nets)) {
             //displayInterfaceInformation(netint);
 
+
             Enumeration<InetAddress> inetAddresses = netint.getInetAddresses();
             for (InetAddress inetAddress : Collections.list(inetAddresses)) {
                 if(inetAddress.isLinkLocalAddress()){
@@ -94,7 +95,7 @@ public class Main{
                         break;
                     }
                     case 1: {
-                        docHash = createDocument(dm, 1300, "100MB.zip");
+                        docHash = createDocument(dm, 1300, "1GB.zip");
                         break;
                     }
                     case 2: {
@@ -161,7 +162,7 @@ public class Main{
             e.printStackTrace();
         }
 
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu);
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu, 1000);
         Thread t = new Thread(mainListener);
 
         t.start();
