@@ -261,10 +261,10 @@ public class ReceiverStats {
         int capacityInDPS = ((this.NICCapacity*1000000)/(this.averageDPSize*8));
         System.out.println("                    " + this.NICCapacity*1000000 + " / " + (this.averageDPSize*8) + " = " + capacityInDPS);
 
-        int maxDPSPerListener = Math.min(capacityInDPS/this.numberOfListeners, 5000);
-        maxDPSPerListener = Math.max(maxDPSPerListener, 1);
+        int maxDPSPerListener;// = Math.min(capacityInDPS/this.numberOfListeners, 5000);
+        maxDPSPerListener = Math.max(capacityInDPS/this.numberOfListeners, 1);
 
-        if(this.numberOfMissingChunks/maxDPSPerListener > 20) {
+        if(this.numberOfMissingChunks/capacityInDPS > 20) {
             System.out.println("                    Multipliquei por 0.85");
             maxDPSPerListener *= .80;
         }

@@ -19,9 +19,12 @@ public class FastUnicastSender implements Runnable{
 
     private InetAddress IP;
     private int destPort;
+
     private int dpPS;
-    private int sleeptimeMS;
-    private int sleeptimeNS;
+    private int sleeptimeMilliSeconds;
+    private int sleeptimeMicroSeconds;
+    private int consecutiveSends;
+
     private ReentrantLock dpsLock;
     private DatagramSocket ds;
 
@@ -33,7 +36,6 @@ public class FastUnicastSender implements Runnable{
     private ArrayList<Integer> chunkIDs;
 
     private ReentrantLock chunkIDsLock;
-    private ReentrantLock chunkArraysLock;
     private ReentrantLock isRunning_lock;
 
     private boolean isRunning;
@@ -43,9 +45,18 @@ public class FastUnicastSender implements Runnable{
         this.IP = IP;
         this.destPort = destPort;
         this.dpPS = dpPS;
-        this.sleeptimeMS = 1000 / this.dpPS;
-        if(this.sleeptimeMS == 0)
-            this.sleeptimeNS = (100000 / this.dpPS) * 10000;
+        this.sleeptimeMilliSeconds = 1000 / this.dpPS;
+        if(this.sleeptimeMilliSeconds < 10) {
+            this.sleeptimeMicroSeconds = (1000000 / this.dpPS);
+            this.consecutiveSends = (int) Math.ceil((double)10000 / this.sleeptimeMicroSeconds);
+            this.sleeptimeMilliSeconds = (this.sleeptimeMicroSeconds * this.consecutiveSends) / 1000;
+        }
+        else{
+            this.consecutiveSends = 1;
+        }
+
+        System.out.println("SleepTime " + this.sleeptimeMilliSeconds);
+        System.out.println("Consecutive Sends " + this.consecutiveSends);
         this.dpsLock = new ReentrantLock();
 
         this.cm = cm;
@@ -57,10 +68,8 @@ public class FastUnicastSender implements Runnable{
         this.chunkIDs = chunkIDs;
 
         this.chunkIDsLock = new ReentrantLock();
-        //this.chunkArraysLock = new ReentrantLock();
         this.isRunning_lock = new ReentrantLock();
 
-        //chunkLoader();
 
         this.isRunning = false;
 
@@ -72,32 +81,6 @@ public class FastUnicastSender implements Runnable{
             e.printStackTrace();
         }
     }
-
-    /*private void chunkLoader(){
-
-        new Thread(() ->{
-            Chunk[] chunks;
-            this.chunkIDsLock.lock();
-            while(this.chunkIDs.size() > 0){
-                if (this.chunkIDs.size() < 200) {
-                    chunks = this.cm.getMissingChunks(this.chunkIDs);
-                    this.chunkIDs.clear();
-                }
-                else {
-                    chunks = this.cm.getMissingChunks(copyArrayListSection(this.chunkIDs, 0, 200));
-                    this.chunkIDs = copyArrayListSection(this.chunkIDs, 200, this.chunkIDs.size());
-                }
-                this.chunkIDsLock.unlock();
-
-                this.chunkArraysLock.lock();
-                this.chunkArrays.add(chunks);
-                this.chunkArraysLock.unlock();
-
-                this.chunkIDsLock.lock();
-            }
-            this.chunkIDsLock.unlock();
-        }).start();
-    }*/
 
     private void sendFileChunk(Chunk chunk) {
         ChunkMessage ch = new ChunkMessage(this.ID, chunk);
@@ -128,13 +111,12 @@ public class FastUnicastSender implements Runnable{
         this.isRunning_lock.unlock();
 
         Chunk[] chunks;
-        //this.chunkArraysLock.lock();
         int chunkArraysSize = chunkArrays.size();
-        //this.chunkArraysLock.unlock();
+
+        long initialLoadStart = System.currentTimeMillis();
 
         this.chunkIDsLock.lock();
         if(chunkArraysSize == 0 && this.chunkIDs.size() > 0) {
-            //start = System.currentTimeMillis();
             if (this.chunkIDs.size() < 200) {
                 chunks = this.cm.getMissingChunks(this.chunkIDs);
                 this.chunkIDs.clear();
@@ -143,78 +125,74 @@ public class FastUnicastSender implements Runnable{
                 this.chunkIDs = copyArrayListSection(this.chunkIDs, 200, this.chunkIDs.size());
             }
 
-            //this.chunkArraysLock.lock();
             this.chunkArrays.add(chunks);
-            //this.chunkArraysLock.unlock();
             chunks = null;
-            //end = System.currentTimeMillis();
-            //System.out.println("        WASTED " + (end - start) + " ms LOADING INITIAL CHUNKS");
         }
         this.chunkIDsLock.unlock();
 
+        int
+                accumulatedOverSleep = (int)(System.currentTimeMillis() - initialLoadStart);
 
 
-        int cycleExecTime, sleepTimeMS, sleepTimeNS;
-        long cycleStart = System.currentTimeMillis(), cycleEnd, start;
+        int cycleExecTime, sleeptimeMilliSeconds;
+        long cycleStart = System.currentTimeMillis();
         Chunk[] chunksToSend;
         int pointer;
 
         this.isRunning_lock.lock();
-        //this.chunkArraysLock.lock();
             while(this.chunkArrays.size() > 0){
                 this.isRunning_lock.unlock();
-                chunksToSend = this.chunkArrays.get(0);
+                chunksToSend = this.chunkArrays.get(0); // !!! EXCEPTION chunk array vazio
                 this.chunkArrays.remove(0);
-                //this.chunkArraysLock.unlock();
                 pointer = 0;
 
                 this.isRunning_lock.lock();
                 while (pointer < chunksToSend.length){
                     this.isRunning_lock.unlock();
 
-                        try {
-                            sendFileChunk(chunksToSend[pointer]);
-                            chunksToSend[pointer] = null;
-                            pointer++;
+                    //Multiple Send
+                    for(int send = 0; send < this.consecutiveSends && pointer < chunksToSend.length; send++) {
+                        sendFileChunk(chunksToSend[pointer]);
+                        chunksToSend[pointer] = null;
+                        pointer++;
+                    }
 
-                            //CODE THAT DETERMINES THE AMOUNT OF TIME TO SLEEP
-                            this.dpsLock.lock();
-                            if(this.sleeptimeMS != 0) {
-                                this.dpsLock.unlock();
-                                cycleEnd = System.currentTimeMillis();
-                                cycleExecTime = (int) (cycleEnd - cycleStart);
+                    //Sleep
+                    this.dpsLock.lock();
+                    sleeptimeMilliSeconds = this.sleeptimeMilliSeconds;
+                    this.dpsLock.unlock();
+                    cycleExecTime = (int) (System.currentTimeMillis() - cycleStart);
 
-                                this.dpsLock.lock();
-                                sleepTimeMS = this.sleeptimeMS;
-                                this.dpsLock.unlock();
-                                if (cycleExecTime < sleepTimeMS) {
-                                    Thread.sleep(sleepTimeMS - cycleExecTime);
-                                }
+                    if(cycleExecTime < sleeptimeMilliSeconds) {
 
-                                cycleStart = System.currentTimeMillis();
+                        sleeptimeMilliSeconds -= cycleExecTime;
+                        if(accumulatedOverSleep < sleeptimeMilliSeconds) {
+
+                            sleeptimeMilliSeconds -= accumulatedOverSleep;
+                            accumulatedOverSleep = 0;
+                            try {
+                                Thread.sleep(sleeptimeMilliSeconds);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
                             }
-                            else{
-                                sleepTimeNS = this.sleeptimeNS;
-                                this.dpsLock.unlock();
-                                Thread.sleep(0, sleepTimeNS);
-                            }
-
                         }
-                        catch (Exception e){
-                            e.printStackTrace();
+                        else{
+                            accumulatedOverSleep -= sleeptimeMilliSeconds;
                         }
+                    }
+                    else {
+                        accumulatedOverSleep += cycleExecTime - sleeptimeMilliSeconds;
+                    }
 
+                    cycleStart = System.currentTimeMillis();
                     this.isRunning_lock.lock();
                 }
                 this.isRunning_lock.unlock();
 
-                //this.chunkArraysLock.lock();
                 chunkArraysSize = chunkArrays.size();
-                //this.chunkArraysLock.unlock();
 
                 this.chunkIDsLock.lock();
                 if(chunkArraysSize == 0 && this.chunkIDs.size() > 0) {
-                    //start = System.currentTimeMillis();
                     if (this.chunkIDs.size() < 200) {
                         chunks = this.cm.getMissingChunks(this.chunkIDs);
                         this.chunkIDs.clear();
@@ -223,21 +201,15 @@ public class FastUnicastSender implements Runnable{
                         this.chunkIDs = copyArrayListSection(this.chunkIDs, 200, this.chunkIDs.size());
                     }
 
-                    //this.chunkArraysLock.lock();
                     this.chunkArrays.add(chunks);
-                    //this.chunkArraysLock.unlock();
                     chunks = null;
-                    //end = System.currentTimeMillis();
-                    //System.out.println("        WASTED " + (end - start) + " ms LOADING INITIAL CHUNKS");
                 }
                 this.chunkIDsLock.unlock();
 
-                //this.chunkArraysLock.lock();
                 this.isRunning_lock.lock();
             }
         this.isRunning = false;
         this.isRunning_lock.unlock();
-        //this.chunkArraysLock.unlock();
     }
 
     private byte[] getBytesFromObject(Object obj) {
@@ -295,9 +267,14 @@ public class FastUnicastSender implements Runnable{
     public void changeDPS(int dps){
         this.dpsLock.lock();
         this.dpPS = dps;
-        this.sleeptimeMS = 1000 / dps;
-        if(this.sleeptimeMS == 0) {
-            this.sleeptimeNS = (100000 / this.dpPS) * 10000;
+        this.sleeptimeMilliSeconds = 1000 / this.dpPS;
+        if(this.sleeptimeMilliSeconds < 10) {
+            this.sleeptimeMicroSeconds = (1000000 / this.dpPS);
+            this.consecutiveSends = (int) Math.ceil((double)10000 / this.sleeptimeMicroSeconds);
+            this.sleeptimeMilliSeconds = (this.sleeptimeMicroSeconds * this.consecutiveSends) / 1000;
+        }
+        else{
+            this.consecutiveSends = 1;
         }
         this.dpsLock.unlock();
     }

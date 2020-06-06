@@ -162,7 +162,7 @@ public class Main{
             e.printStackTrace();
         }
 
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu, 1000);
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu, 100);
         Thread t = new Thread(mainListener);
 
         t.start();
