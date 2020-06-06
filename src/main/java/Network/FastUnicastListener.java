@@ -180,7 +180,7 @@ public class FastUnicastListener implements Runnable {
 
     public void changeByteArraysSize(int rtt, int dps){
         //500 = 2/1000
-        int newByteArraysSize = ((dps * rtt)/500);
+        int newByteArraysSize = ((dps * rtt)/500); // EXCEPTION!!!!!!!! NUMERO NEGATIVO
         byte[][] tmp = new byte[newByteArraysSize][];
         this.arrayLock.lock();
 

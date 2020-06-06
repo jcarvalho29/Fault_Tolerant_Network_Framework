@@ -398,7 +398,7 @@ public class TransferMultiSender implements Runnable{
 
         try {
             in = new ObjectInputStream(bis);
-            o = in.readObject();
+            o = in.readObject(); //EXCEPTION!!!! java.io.EOFException
         }
         catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();

@@ -82,29 +82,6 @@ public class FastUnicastSender implements Runnable{
         }
     }
 
-    private void sendFileChunk(Chunk chunk) {
-        ChunkMessage ch = new ChunkMessage(this.ID, chunk);
-
-        byte[] serializedChunkHeader = getBytesFromObject(ch);
-
-        try{
-            DatagramPacket packet = new DatagramPacket(serializedChunkHeader, serializedChunkHeader.length, this.IP, this.destPort);
-
-            this.ds.send(packet);
-            //System.out.println("SENT CHUNK " + this.IP + " " + this.destPort);
-        }
-        catch (IOException e) {
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException ex) {
-                //ex.printStackTrace();
-            }
-        }
-        catch (Exception e){
-            e.printStackTrace();
-        }
-    }
-
     public void run() {
         this.isRunning_lock.lock();
         this.isRunning = true;
@@ -152,7 +129,29 @@ public class FastUnicastSender implements Runnable{
 
                     //Multiple Send
                     for(int send = 0; send < this.consecutiveSends && pointer < chunksToSend.length; send++) {
-                        sendFileChunk(chunksToSend[pointer]);
+
+
+                        //Send Chunk
+                        ChunkMessage ch = new ChunkMessage(this.ID, chunksToSend[pointer]);
+                        byte[] serializedChunkHeader = getBytesFromObject(ch);
+                        try{
+                            DatagramPacket packet = new DatagramPacket(serializedChunkHeader, serializedChunkHeader.length, this.IP, this.destPort);
+
+                            this.ds.send(packet);
+                            //System.out.println("SENT CHUNK " + this.IP + " " + this.destPort);
+                        }
+                        catch (IOException e) {
+                            try {
+                                Thread.sleep(500);
+                            } catch (InterruptedException ex) {
+                                ex.printStackTrace();
+                            }
+                        }
+                        catch (Exception e){
+                            e.printStackTrace();
+                        }
+
+
                         chunksToSend[pointer] = null;
                         pointer++;
                     }

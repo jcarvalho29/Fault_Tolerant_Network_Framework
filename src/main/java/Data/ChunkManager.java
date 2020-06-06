@@ -457,29 +457,34 @@ public class ChunkManager {
 
         }
         else{*/
-        int totalNumberOfChunks = this.mi.numberOfChunks;
-        boolean[] missingc = new boolean[totalNumberOfChunks];
+        //NECESSÁRIO PARA MULTITHREAD
+        /*
+         int totalNumberOfChunks = this.mi.numberOfChunks;
+         boolean[] missingc = new boolean[totalNumberOfChunks];
 
         //fill with true
         missingc[0] = true;
         for (int i = 1; i < totalNumberOfChunks; i += i)
             System.arraycopy(missingc, 0, missingc, i, Math.min((totalNumberOfChunks - i), i));
-
+*/
         this.mi_Lock.lock();
-            for (ChunkMessage cm : chunkMessages) {
-                missingc[cm.chunk.place - Integer.MIN_VALUE] = false;
+            for (int i = 0; i < chunkMessages.length; i++) {
+                //missingc[chunkMessages[i].chunk.place - Integer.MIN_VALUE] = false;
+                this.mi.missingChunks[chunkMessages[i].chunk.place - Integer.MIN_VALUE] = false;
                 this.mi.numberOfChunksInArray++;
-                this.mi.chunksSize += cm.chunk.Chunk.length;
+                this.mi.chunksSize += chunkMessages[i].chunk.Chunk.length;
             }
         this.mi_Lock.unlock();
 
-        this.missingChunks_Lock.lock();
-            for(int i = 0; i < totalNumberOfChunks; i++)
-                this.mi.missingChunks[i] = this.mi.missingChunks[i] & missingc[i];
-        this.missingChunks_Lock.unlock();
+            //NECESSÁRIO PARA MULTITHREAD
+        /*this.missingChunks_Lock.lock();
+            for(int i = 0; i < totalNumberOfChunks && !missingc[i]; i++)
+                this.mi.missingChunks[i] = false;
+//        this.mi.missingChunks[i] = this.mi.missingChunks[i] & missingc[i];
+        this.missingChunks_Lock.unlock();*/
 
         this.mi_Lock.lock();
-            if (this.mi.numberOfChunksInArray == totalNumberOfChunks)
+            if (this.mi.numberOfChunksInArray == this.mi.numberOfChunks)
                     this.mi.full = true;
 
         this.mi_Lock.unlock();

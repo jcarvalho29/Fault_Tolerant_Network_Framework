@@ -433,7 +433,7 @@ public class TransferReceiverManager implements Runnable{
     public void run() {
 
         long cycleStart;
-        long cycleEnd;
+        int cycleExecTime, sleepTime;
 
         int tmri_Dropped = 0;
         boolean isFirstCycle = true;
@@ -513,10 +513,8 @@ public class TransferReceiverManager implements Runnable{
                 }
             }
 
-            cycleEnd = System.currentTimeMillis();
-
-            int cycleExecTime = (int) (cycleEnd - cycleStart);
-            int sleepTime = getSleepTime(cycleExecTime);
+            cycleExecTime = (int) (System.currentTimeMillis() - cycleStart);
+             sleepTime = getSleepTime(cycleExecTime);
             if(this.run && sleepTime > 0) {
                 try {
                     //System.out.println("SLEEP FOR " + sleepTime);
