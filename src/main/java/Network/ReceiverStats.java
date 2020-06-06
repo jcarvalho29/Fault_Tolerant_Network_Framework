@@ -256,7 +256,7 @@ public class ReceiverStats {
         return this.transferCycleStartTime.size();
     }
 
-    public int calculateDPS(){
+    public void calculateDPS(){
         System.out.println("                    CALCULATING DPS");
         int capacityInDPS = ((this.NICCapacity*1000000)/(this.averageDPSize*8));
         System.out.println("                    " + this.NICCapacity*1000000 + " / " + (this.averageDPSize*8) + " = " + capacityInDPS);
@@ -266,13 +266,14 @@ public class ReceiverStats {
 
         if(this.numberOfMissingChunks/maxDPSPerListener > 20) {
             System.out.println("                    Multipliquei por 0.85");
-            maxDPSPerListener *= .85;
+            maxDPSPerListener *= .80;
         }
+        //else
+            //maxDPSPerListener *= .90;
 
         //aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
         this.dpsPerCycle.add(maxDPSPerListener);
 
-        return maxDPSPerListener;
     }
 
     public int getDPS(){

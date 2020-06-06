@@ -44,7 +44,8 @@ public class FastUnicastSender implements Runnable{
         this.destPort = destPort;
         this.dpPS = dpPS;
         this.sleeptimeMS = 1000 / this.dpPS;
-        this.sleeptimeNS = (1000000000/this.dpPS) % 1000000;
+        if(this.sleeptimeMS == 0)
+            this.sleeptimeNS = (100000 / this.dpPS) * 10000;
         this.dpsLock = new ReentrantLock();
 
         this.cm = cm;
@@ -153,8 +154,8 @@ public class FastUnicastSender implements Runnable{
 
 
 
-        int cycleExecTime, sleepTimeMS;
-        long cycleStart = System.currentTimeMillis(), cycleEnd, sleepTimeNS, start;
+        int cycleExecTime, sleepTimeMS, sleepTimeNS;
+        long cycleStart = System.currentTimeMillis(), cycleEnd, start;
         Chunk[] chunksToSend;
         int pointer;
 
@@ -195,8 +196,7 @@ public class FastUnicastSender implements Runnable{
                             else{
                                 sleepTimeNS = this.sleeptimeNS;
                                 this.dpsLock.unlock();
-                                start = System.nanoTime();
-                                while(System.nanoTime() - start < sleepTimeNS);
+                                Thread.sleep(0, sleepTimeNS);
                             }
 
                         }
@@ -296,8 +296,9 @@ public class FastUnicastSender implements Runnable{
         this.dpsLock.lock();
         this.dpPS = dps;
         this.sleeptimeMS = 1000 / dps;
-        if(this.sleeptimeMS == 0)
-            this.sleeptimeNS = (1000000000/dps) % 1000000;
+        if(this.sleeptimeMS == 0) {
+            this.sleeptimeNS = (100000 / this.dpPS) * 10000;
+        }
         this.dpsLock.unlock();
     }
 

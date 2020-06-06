@@ -91,7 +91,7 @@ public class TransferReceiverManager implements Runnable{
         for(int i = 0; i < numberOfListeners; i++){
 
             fus = new FastUnicastListener(this.MTU, this.stats.getDPS());
-            System.out.println("CREATED FASUNICAST WITH DPS AT " + this.stats.getDPS());
+            //System.out.println("CREATED FASUNICAST WITH DPS AT " + this.stats.getDPS());
             Thread t = new Thread(fus);
 
             t.start();

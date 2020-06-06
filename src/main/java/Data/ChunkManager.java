@@ -842,9 +842,10 @@ public class ChunkManager {
     */
     public int getNumberOfMissingChunks(){
         int numberOfMissingChunks = 0;
-        for(boolean val : this.mi.missingChunks)
-            if(val)
-                numberOfMissingChunks++;
+        if(this.mi.missingChunks != null)
+            for(boolean val : this.mi.missingChunks)
+                if(val)
+                    numberOfMissingChunks++;
 
         return numberOfMissingChunks;
     }

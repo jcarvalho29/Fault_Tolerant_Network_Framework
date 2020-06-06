@@ -95,7 +95,7 @@ public class Main{
                         break;
                     }
                     case 1: {
-                        docHash = createDocument(dm, 1300, "1GB.zip");
+                        docHash = createDocument(dm, 1300, "100MB.zip");
                         break;
                     }
                     case 2: {

@@ -297,7 +297,6 @@ public class TransferMultiSender implements Runnable{
                 if (!isRunning) {
                     t = new Thread(fus);
                     t.start();
-                    System.out.println("WASN'T RUNNING");
                 }
             }
         }
