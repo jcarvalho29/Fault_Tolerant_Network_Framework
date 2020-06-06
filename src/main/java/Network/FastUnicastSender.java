@@ -33,14 +33,14 @@ public class FastUnicastSender implements Runnable{
 
     private int ID;
 
-    private ArrayList<Integer> chunkIDs;
+    private ArrayList<int[]> chunkIDsArray;
 
     private ReentrantLock chunkIDsLock;
     private ReentrantLock isRunning_lock;
 
     private boolean isRunning;
 
-    public FastUnicastSender(int ID, InetAddress IP, int destPort, ChunkManager cm, ArrayList<Integer> chunkIDs, int dpPS){
+    public FastUnicastSender(int ID, InetAddress IP, int destPort, ChunkManager cm, int[] chunkIDs, int dpPS){
 
         this.IP = IP;
         this.destPort = destPort;
@@ -65,7 +65,8 @@ public class FastUnicastSender implements Runnable{
 
         this.ID = ID;
 
-        this.chunkIDs = chunkIDs;
+        this.chunkIDsArray = new ArrayList<int[]>();
+        this.chunkIDsArray.add(chunkIDs);
 
         this.chunkIDsLock = new ReentrantLock();
         this.isRunning_lock = new ReentrantLock();
@@ -88,18 +89,22 @@ public class FastUnicastSender implements Runnable{
         this.isRunning_lock.unlock();
 
         Chunk[] chunks;
-        int chunkArraysSize = chunkArrays.size();
-
+        int chunkArraysSize;
+        int chunkIDsArraySize = this.chunkIDsArray.size();
+        int[] chunkIDs = null;
         long initialLoadStart = System.currentTimeMillis();
 
         this.chunkIDsLock.lock();
-        if(chunkArraysSize == 0 && this.chunkIDs.size() > 0) {
-            if (this.chunkIDs.size() < 200) {
-                chunks = this.cm.getMissingChunks(this.chunkIDs);
-                this.chunkIDs.clear();
+        if(chunkIDsArraySize > 0) {
+            chunkIDs = this.chunkIDsArray.get(0);
+            this.chunkIDsArray.remove(0);
+            if (chunkIDs.length < 200) {
+                chunks = this.cm.getMissingChunks(chunkIDs);
+                chunkIDs = null;
             } else {
-                chunks = this.cm.getMissingChunks(copyArrayListSection(this.chunkIDs, 0, 200));
-                this.chunkIDs = copyArrayListSection(this.chunkIDs, 200, this.chunkIDs.size());
+                int chunkIDsSize = chunkIDs.length;
+                chunks = this.cm.getMissingChunks(copyArrayListSection(chunkIDs,200));
+                chunkIDs = chopArray(chunkIDs, 200);
             }
 
             this.chunkArrays.add(chunks);
@@ -191,13 +196,17 @@ public class FastUnicastSender implements Runnable{
                 chunkArraysSize = chunkArrays.size();
 
                 this.chunkIDsLock.lock();
-                if(chunkArraysSize == 0 && this.chunkIDs.size() > 0) {
-                    if (this.chunkIDs.size() < 200) {
-                        chunks = this.cm.getMissingChunks(this.chunkIDs);
-                        this.chunkIDs.clear();
+                if(chunkArraysSize == 0 && (chunkIDs != null || this.chunkIDsArray.size() > 0)) {
+                    if(chunkIDs == null){
+                        chunkIDs = this.chunkIDsArray.get(0);
+                        this.chunkIDsArray.remove(0);
+                    }
+                    if (chunkIDs.length < 200) {
+                        chunks = this.cm.getMissingChunks(chunkIDs);
+                        chunkIDs = null;
                     } else {
-                        chunks = this.cm.getMissingChunks(copyArrayListSection(this.chunkIDs, 0, 200));
-                        this.chunkIDs = copyArrayListSection(this.chunkIDs, 200, this.chunkIDs.size());
+                        chunks = this.cm.getMissingChunks(copyArrayListSection(chunkIDs,200));
+                        chunkIDs = chopArray(chunkIDs, 200);
                     }
 
                     this.chunkArrays.add(chunks);
@@ -237,17 +246,14 @@ public class FastUnicastSender implements Runnable{
         return data;
     }
 
-    public boolean addChunksToSend(ArrayList<Integer> newChunksIDs) {
+    public boolean addChunksToSend(int[] newChunksIDs) {
         boolean res;
+
         this.isRunning_lock.lock();
         res = this.isRunning;
 
         this.chunkIDsLock.lock();
-        //remove repetidos
-        for(int id : newChunksIDs){
-            if(!this.chunkIDs.contains(id))
-                this.chunkIDs.add(id);
-        }
+        this.chunkIDsArray.add(newChunksIDs);
         this.chunkIDsLock.unlock();
         this.isRunning_lock.unlock();
 
@@ -278,12 +284,18 @@ public class FastUnicastSender implements Runnable{
         this.dpsLock.unlock();
     }
 
-    private ArrayList<Integer> copyArrayListSection(ArrayList<Integer> original, int start, int end){
-        ArrayList<Integer> res = new ArrayList<>();
+    private int[] copyArrayListSection(int[] original, int length){
+        int[] res = new int[length];
 
-        for(int i = start; i < end; i++)
-            res.add(original.get(i));
+        System.arraycopy(original, 0, res, 0, length);
 
         return res;
+    }
+
+    private int[] chopArray(int[] original, int length){
+        int[] newOriginal = new int[original.length-length];
+        System.arraycopy(original, length, newOriginal, 0, original.length-length);
+
+        return newOriginal;
     }
 }

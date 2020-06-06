@@ -95,7 +95,7 @@ public class Main{
                         break;
                     }
                     case 1: {
-                        docHash = createDocument(dm, 1300, "1GB.zip");
+                        docHash = createDocument(dm, 1300, "100MB.zip");
                         break;
                     }
                     case 2: {
@@ -162,7 +162,7 @@ public class Main{
             e.printStackTrace();
         }
 
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu, 800);
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu, 1000);
         Thread t = new Thread(mainListener);
 
         t.start();

@@ -31,6 +31,8 @@ public class ChunkManager {
         Root = folderPathNormalizer(Root);
         this.Root = Root;
         this.mi_Lock = new ReentrantLock();
+        this.missingChunks_Lock = new ReentrantLock();
+
     }
 
     /*
@@ -97,7 +99,7 @@ public class ChunkManager {
 
         this.mi.datagramMaxSize = datagramMaxSize;
         this.mi.numberOfChunks = (int) Math.ceil((double) info.length / (double) this.mi.datagramMaxSize);
-        ;
+
         this.mi.numberOfChunksInArray = 0;
         this.mi.chunksSize = info.length;
 
@@ -468,12 +470,25 @@ public class ChunkManager {
             System.arraycopy(missingc, 0, missingc, i, Math.min((totalNumberOfChunks - i), i));
 */
         this.mi_Lock.lock();
-            for (int i = 0; i < chunkMessages.length; i++) {
+        int i = 0;
+        try {
+            for (; i < chunkMessages.length; i++) {
                 //missingc[chunkMessages[i].chunk.place - Integer.MIN_VALUE] = false;
                 this.mi.missingChunks[chunkMessages[i].chunk.place - Integer.MIN_VALUE] = false;
                 this.mi.numberOfChunksInArray++;
                 this.mi.chunksSize += chunkMessages[i].chunk.Chunk.length;
             }
+        }
+        catch (Exception e){
+            e.printStackTrace();
+            if(chunkMessages != null) {
+                System.out.println("ChunkMessages length " + chunkMessages.length + " I " + i);
+                if(chunkMessages[i] != null)
+                    System.out.println("Chunk place " + (chunkMessages[i].chunk.place - Integer.MIN_VALUE) + " MissingChunks length " + this.mi.missingChunks.length);
+            }
+            else
+                System.out.println("CHUNK MESSAGES NULL");
+        }
         this.mi_Lock.unlock();
 
             //NECESSÁRIO PARA MULTITHREAD
@@ -496,8 +511,8 @@ public class ChunkManager {
 
             //long beforeWriting = System.currentTimeMillis();
             Chunk[] chunks = new Chunk[chunkMessages.length];
-            for(int i = 0; i < chunks.length; i++)
-                chunks[i] = chunkMessages[i].chunk;
+            for(int j = 0; j < chunks.length; j++)
+                chunks[j] = chunkMessages[j].chunk;
 
             writeChunksToFolder(chunks);
             //long afterWriting = System.currentTimeMillis();
@@ -560,11 +575,11 @@ public class ChunkManager {
      *
      * This function is intended to be used to retrieve FileChunks that have been marked as Missing by a File Receiver.
      */
-    public Chunk[] getMissingChunks(ArrayList<Integer> mfc){
+    public Chunk[] getMissingChunks(int[] mcID){
         String folder = this.Root + this.mi.Hash + "/Chunks/";
 
         File folderFile = new File (folder);
-        Chunk[] res = new Chunk[mfc.size()];
+        Chunk[] res = new Chunk[mcID.length];
         int id;
         try {
             if(folderFile.exists() && folderFile.isDirectory()){
@@ -574,8 +589,8 @@ public class ChunkManager {
                 int lastChunkSize =(int) (this.mi.chunksSize % ((this.mi.numberOfChunks-1) * this.mi.datagramMaxSize));
                 int lastChunkID = this.mi.numberOfChunks-1 + Integer.MIN_VALUE;
                 int j, k;*/
-                for(int i = 0; i < mfc.size(); i++){
-                    id = mfc.get(i);
+                for(int i = 0; i < mcID.length; i++){
+                    id = mcID[i];
                    /* FileInputStream fis = new FileInputStream(new File(tmpFolder + "/" + id + ".chunk"));
                     BufferedInputStream bis = new BufferedInputStream(fis);
 
@@ -812,19 +827,22 @@ public class ChunkManager {
         return new CompressedMissingChunksID(referenceID, toAddArray, incArray);
     }
 
-    public ArrayList<Integer> getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
-        ArrayList<Integer> res = new ArrayList<Integer>();
+    public int[] getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
+        int numberOfIDs = cmcid.increments.length + 1;
+
+        int[] res = new int[numberOfIDs];
+        int pointer = 1;
 
         int currentID = cmcid.referenceID;
-
         int maxValue = Byte.MAX_VALUE - Byte.MIN_VALUE;
 
-        res.add(currentID);
+        res[0] = currentID;
+
         int i = 0;
         int toAddAux;
 
-        for(byte increment : cmcid.increments){
-            toAddAux = (int)increment - Byte.MIN_VALUE;
+        for(int j = 0; j < cmcid.increments.length; j++){
+            toAddAux = (int)cmcid.increments[j] - Byte.MIN_VALUE;
 
             while(i < cmcid.toAdd.length && !cmcid.toAdd[i]) {
                 currentID += maxValue;
@@ -833,12 +851,12 @@ public class ChunkManager {
 
             if(i < cmcid.toAdd.length){
                 currentID += toAddAux;
-                res.add(currentID);
+                res[pointer] = currentID;
+                pointer++;
                 i++;
             }
         }
 
-        //System.out.println(res);
         return res;
     }
 

@@ -47,7 +47,7 @@ public class TransferMultiSender implements Runnable{
     private int unicastPort;
 
     private ArrayList<FastUnicastSender> fastSenders;
-    private ArrayList<Integer> transmittedMissingChunkIDs;
+    private int[] transmittedMissingChunkIDs;
 
     private ReentrantLock timeout_Lock;
     private int consecutiveTimeouts;
@@ -77,7 +77,7 @@ public class TransferMultiSender implements Runnable{
         this.timeoutSES = Executors.newSingleThreadScheduledExecutor();
 
         this.fastSenders = new ArrayList<FastUnicastSender>();
-        this.transmittedMissingChunkIDs = new ArrayList<>();
+        this.transmittedMissingChunkIDs = null;
 
         this.timeout_Lock = new ReentrantLock();
         this.consecutiveTimeouts = 0;
@@ -216,39 +216,51 @@ public class TransferMultiSender implements Runnable{
     }
     private void processTransferMultiReceiverInfo(TransferMultiReceiverInfo tmri){
 
-        ArrayList<Integer> mc;
+        int[] mc;
+        int[] mcholder;
 
         if(tmri.cmcID != null) {
-            mc = this.cm.getIDsFromCompressedMissingChunksID(tmri.cmcID);
-            mc.addAll(this.transmittedMissingChunkIDs);
-            this.transmittedMissingChunkIDs.clear();
+            mcholder = this.cm.getIDsFromCompressedMissingChunksID(tmri.cmcID);
+            if(this.transmittedMissingChunkIDs != null) {
+                mc = new int[mcholder.length + this.transmittedMissingChunkIDs.length];
+                System.arraycopy(mcholder, 0 , mc, 0, mcholder.length);
+                System.arraycopy(this.transmittedMissingChunkIDs, 0 , mc, mcholder.length, this.transmittedMissingChunkIDs.length);
+            }
+            else {
+                mc = mcholder;
+            }
+
+
+            mcholder = null;
+            this.transmittedMissingChunkIDs = null;
         }
         else{
-            mc = new ArrayList<Integer>();
+            mc = new int[this.cm.mi.numberOfChunks];
             for(int i = 0; i < cm.mi.numberOfChunks; i++){
-                mc.add(i + Integer.MIN_VALUE);
+                mc[i] = i + Integer.MIN_VALUE;
             }
         }
 
         int numberOfReceivers = tmri.ports.length;
-        int chunksPerSender = Math.floorDiv(mc.size(), numberOfReceivers);
+        int chunksPerSender = Math.floorDiv(mc.length, numberOfReceivers);
         int split;
         FastUnicastSender fus;
         Thread t;
 
-        ArrayList<Integer> chunkIDS = new ArrayList<Integer>();
+        int[] chunkIDS;
 
         for(int i = 0; i < numberOfReceivers; i++){
-            if(i == numberOfReceivers-1)
-                split = mc.size();
-            else
+            if(i == numberOfReceivers-1) {
+                split = mc.length;
+                chunkIDS = new int[mc.length - chunksPerSender*i];
+            } else {
                 split = chunksPerSender*(i+1);
+                chunkIDS = new int[chunksPerSender];
+            }
+            System.out.println("FROM " + chunksPerSender*i + " TO " + split + " ( " + (split - chunksPerSender*i) + " ) ARRAY SIZE OF " + chunkIDS.length);
+            System.arraycopy(mc, chunksPerSender*i, chunkIDS, 0, split - chunksPerSender*i);
 
-            chunkIDS.clear();
-            for(int j = chunksPerSender*i; j < split; j++)
-                chunkIDS.add(mc.get(j));
-
-            fus = new FastUnicastSender(this.ID, this.destIP, tmri.ports[i], this.cm, new ArrayList<>(chunkIDS), tmri.datagramPacketsPerSecondPerReceiver);
+            fus = new FastUnicastSender(this.ID, this.destIP, tmri.ports[i], this.cm, chunkIDS, tmri.datagramPacketsPerSecondPerReceiver);
             System.out.println("SENDING TO " + tmri.ports[i] + " | " + chunksPerSender*i + " -> " + (split-1) + " | ( 0 -> " + this.cmmi.numberOfChunks + " )");
             this.fastSenders.add(fus);
 
@@ -259,16 +271,15 @@ public class TransferMultiSender implements Runnable{
 
     private void processMissingChunkIDs(MissingChunkIDs mcids){
 
-        ArrayList<Integer> mc;
+        int[] mc;
 
         if (mcids.cmcID != null) {
             mc = this.cm.getIDsFromCompressedMissingChunksID(mcids.cmcID);
-            //System.out.println("MCID NOT NULL " + mc.size());
         } else {
             //System.out.println("MCID NULL");
-            mc = new ArrayList<Integer>();
+            mc = new int[this.cm.mi.numberOfChunks];
             for (int i = 0; i < cm.mi.numberOfChunks; i++) {
-                mc.add(i);
+                mc[i] = i;
             }
         }
 
@@ -276,11 +287,23 @@ public class TransferMultiSender implements Runnable{
 
         //ESTE IF É PORQUE PODE CHEGAR UM MCIDS ANTES DE UM TMRI E É NECESSÁRIO GUARDAR OS IDS
         if (numberOfReceivers == 0) {
-            this.transmittedMissingChunkIDs.addAll(mc);
+            if(this.transmittedMissingChunkIDs == null)
+                this.transmittedMissingChunkIDs = mc;
+            else{
+                int currentSize = this.transmittedMissingChunkIDs.length;
+                int[] holder = new int[currentSize + mc.length];
+                System.arraycopy(this.transmittedMissingChunkIDs, 0, holder, 0, currentSize);
+                System.arraycopy(mc, 0, holder, currentSize, mc.length);
+                this.transmittedMissingChunkIDs = holder;
+
+                for(int a : this.transmittedMissingChunkIDs)
+                    System.out.print(a + " ");
+                holder = null;
+            }
         }
         else {
-            int chunksPerSender = Math.floorDiv(mc.size(), numberOfReceivers);
-            int split;
+            int chunksPerSender = Math.floorDiv(mc.length, numberOfReceivers);
+            int split, initialMCSize = mc.length;
             boolean isRunning;
             FastUnicastSender fus;
             Thread t;
@@ -288,12 +311,13 @@ public class TransferMultiSender implements Runnable{
             //System.out.println("    CHUNKS PER SENDER " + chunksPerSender);
             for (int i = 0; i < numberOfReceivers; i++) {
                 if (i == numberOfReceivers - 1)
-                    split = mc.size();
+                    split = initialMCSize;
                 else
                     split = chunksPerSender * (i + 1);
                 fus = this.fastSenders.get(i);
                 fus.changeDPS(mcids.DatagramsPerSecondPerSender);
-                isRunning = fus.addChunksToSend(copyArrayListSection(mc, chunksPerSender * i, split));
+                isRunning = fus.addChunksToSend(copyArraySection(mc, split - chunksPerSender*i));
+                mc = chopArray(mc, split - chunksPerSender*i);
                 if (!isRunning) {
                     t = new Thread(fus);
                     t.start();
@@ -348,13 +372,23 @@ public class TransferMultiSender implements Runnable{
         }
     }
 
-    private ArrayList<Integer> copyArrayListSection(ArrayList<Integer> original, int start, int end){
-        ArrayList<Integer> res = new ArrayList<>();
+    private int[] copyArraySection(int[] original, int length){
+        //System.out.println("    COPY ARRAY " + original.length + " " + length);
+        int[] res = new int[length];
 
-        for(int i = start; i < end; i++)
-            res.add(original.get(i));
+        System.arraycopy(original, 0, res, 0, length);
+
 
         return res;
+    }
+
+    private int[] chopArray(int[] original, int length){
+        //System.out.println("    CHOP ARRAY " +original.length + " " + length);
+        int[] newOriginal = new int[original.length-length];
+
+        System.arraycopy(original, length, newOriginal, 0, original.length-length);
+
+        return newOriginal;
     }
 
     private byte[] getBytesFromObject(Object obj) {
