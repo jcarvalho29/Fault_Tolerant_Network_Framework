@@ -651,29 +651,11 @@ public class DataManager {
         ArrayList<CompressedMissingChunksID> res = null;
         if(cm != null){
             res = cm.getCompressedMissingChunksID(maxSize);
-            /*//DEBUG!!!!!!!!!!!!!!!!!!!!!!!
-            if(res != null)
-                checkCMCID(cm, cm.getMissingChunksIDs(), res);*/
         }
 
 
         return res;
     }
-
-/*    private void checkCMCID(ChunkManager cm, boolean[] missingChunksIDs, ArrayList<CompressedMissingChunksID> res) {
-
-        int numberOfMissingChunks = cm.getNumberOfMissingChunks();
-        ArrayList<Integer> ids = new ArrayList<Integer>();
-
-        for(CompressedMissingChunksID c : res){
-            ids.addAll(cm.getIDsFromCompressedMissingChunksID(c));
-        }
-
-        if(numberOfMissingChunks != ids.size())
-            System.out.println("                SOMETHING WRONG WITH THE MISSINGCHUNKS");
-
-
-    }*/
 
     public void changeIsFullEntry(String Hash, boolean full){
 

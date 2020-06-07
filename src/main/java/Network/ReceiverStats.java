@@ -215,7 +215,7 @@ public class ReceiverStats {
 
         long time = System.currentTimeMillis();
         //System.out.println(this.transferCycleStartTime);
-        int duration =(int) (time - this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1));
+        int duration =(int) (time - this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1));//!!!! EXCEPTION OUT OF BOUNDS
         //System.out.println(time + " - " + this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1) + " = " + duration);
         this.transferCycleEndTime.add(time);
 
@@ -257,9 +257,7 @@ public class ReceiverStats {
     }
 
     public void calculateDPS(){
-        System.out.println("                    CALCULATING DPS");
         int capacityInDPS = ((this.NICCapacity*1000000)/(this.averageDPSize*8));
-        System.out.println("                    " + this.NICCapacity*1000000 + " / " + (this.averageDPSize*8) + " = " + capacityInDPS);
 
         int maxDPSPerListener;// = Math.min(capacityInDPS/this.numberOfListeners, 5000);
         maxDPSPerListener = Math.max(capacityInDPS/this.numberOfListeners, 1);

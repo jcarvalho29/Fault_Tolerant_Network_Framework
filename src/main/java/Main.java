@@ -42,27 +42,7 @@ public class Main{
                 }
             }
         }
-/*
-        Teste t = new Teste();
-        Thread th = new Thread(t);
-        th.start();
-        int i = 0;
-        try {
-            ms = new MulticastSocket(3000);
-            ms.joinGroup(InetAddress.getByName("FF02:0:0:0:0:0:0:175"));
-            ds = new DatagramSocket();
-            DatagramPacket dp;
-            while(true) {
-                dp = new DatagramPacket(new byte[2], 2);
-                ms.receive(dp);
-                if(!LocalLinks.contains(dp.getAddress())) {
-                    ds.send(new DatagramPacket(new byte[2], 2, dp.getAddress(), 4000));
-                    out.println("RECEBI de " + dp.getAddress().toString() + " " + (i++));
-                }
-                }
-        } catch (IOException e) {
-            e.printStackTrace();e.printStackTrace();
-        }*/
+
 
         String ftnfpath = createFTNFFolderStructure(MacAddress);
 
@@ -162,7 +142,7 @@ public class Main{
             e.printStackTrace();
         }
 
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 3333, mtu, 1000);
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 15000, mtu, 100);
         Thread t = new Thread(mainListener);
 
         t.start();
@@ -184,7 +164,7 @@ public class Main{
         }
 
 
-        TransferMultiSender tms = new TransferMultiSender(MacAddress, destIP, destPort, 4444, mtu, cm, cmmi, docName, true);
+        TransferMultiSender tms = new TransferMultiSender(MacAddress, destIP, destPort, 15001, mtu, cm, cmmi, docName, true);
         Thread t = new Thread(tms);
         t.start();
         

@@ -710,7 +710,51 @@ public class ChunkManager {
         }
 
         System.out.println("FINAL ACTUALMAXSIZE => " + actualMaxSize);
+
+        //Debug
+        check(res);
+
         return res;
+    }
+
+    private void check(ArrayList<CompressedMissingChunksID> cmcids){
+
+        int numberOfMissingChunks = 0;
+
+        for(int i = 0; i < this.mi.missingChunks.length; i++) {
+            if(this.mi.missingChunks[i])
+                numberOfMissingChunks++;
+        }
+        if(cmcids == null){
+            if(this.mi.numberOfChunks != numberOfMissingChunks)
+                System.out.println("BHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBHBHBHBHBHBHBHHBHBHBHBHBHBHHBHBHBH");
+        }
+        else {
+
+            //int[] convertedCMCIDs = new int[numberOfMissingChunks];
+            ArrayList<Integer> convertedCMCIDs = new ArrayList<>();
+            int[] aux;
+            int idsWritten = 0;
+            for (CompressedMissingChunksID cmcid : cmcids) {
+                aux = getIDsFromCompressedMissingChunksID(cmcid);
+                for(int val : aux)
+                    convertedCMCIDs.add(val);
+
+                //System.arraycopy(aux, 0, convertedCMCIDs, idsWritten, aux.length);
+            }
+
+
+            int j = 0;
+
+            for (int i = 0; i < numberOfMissingChunks; i++) {
+                if (this.mi.missingChunks[i]) {
+                    if (!convertedCMCIDs.contains(i + Integer.MIN_VALUE)) {
+                        System.out.println("                                        DOES NOT HAVE i + Integer.MIN_VALUE " + (i + Integer.MIN_VALUE));
+                        j++;
+                    }
+                }
+            }
+        }
     }
 
     private int maxSize (ArrayList <CompressedMissingChunksID> cmcIDs){
@@ -754,12 +798,18 @@ public class ChunkManager {
 
     private CompressedMissingChunksID getCompressedMissingChunksID(boolean[] missingChunks, int maxSize){
 
-        //System.out.println(mfcGroup);
         int totalNumberOfChunks = this.mi.numberOfChunks;
-        //ArrayList<Integer> mfcGroup = missingChunks;
-        int mcPointer = 0;
-        int referenceID = 0;
+
+        ArrayList<Integer> referenceIDArray = new ArrayList<Integer>();
+        ArrayList<ArrayList<Boolean>> toAddArray = new ArrayList<ArrayList<Boolean>>();
+        ArrayList<ArrayList<Byte>> incArray = new ArrayList<ArrayList<Byte>>();
+
+        int referenceID;
+        ArrayList<Boolean> toAdd = new ArrayList<Boolean>();
+        ArrayList<Byte> inc = new ArrayList<Byte>();
+
         int currentID = 0;
+        int mcPointer = 0;
 
         for(int i = 0; i < totalNumberOfChunks && mcPointer == 0; i++)
             if(missingChunks[i]){
@@ -767,20 +817,22 @@ public class ChunkManager {
                 mcPointer = i+1;
                 referenceID = i + Integer.MIN_VALUE;
                 currentID = referenceID;
+                referenceIDArray.add(referenceID);
             }
 
         int currentSize = Integer.SIZE;
 
-        ArrayList<Boolean> toAdd = new ArrayList<Boolean>();
-
-        ArrayList<Byte> inc = new ArrayList<Byte>();
-
-        int dif = Byte.MAX_VALUE - Byte.MIN_VALUE;
         int nextID;
-        // System.out.println("CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
+        int maxByteValue = Byte.MAX_VALUE - Byte.MIN_VALUE;
+        int diff;
+        int consecutiveFalses;
+        int increment;
+
+
         while (currentSize < maxSize &&  mcPointer < totalNumberOfChunks) {
             //System.out.println("    CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize + "\n i " + i + " mfc.size " + mfcGroup.size());
             nextID = 0;
+            // procurar o proximo ID a representar na estrutura
             while (mcPointer < totalNumberOfChunks && nextID == 0) {
                 if (missingChunks[mcPointer]) {
                     missingChunks[mcPointer] = false;
@@ -790,70 +842,152 @@ public class ChunkManager {
             }
 
             if (nextID != 0) {
-                //System.out.println(currentID + " + " + dif + " < " + nextID + " " + mfcGroup.isEmpty());
-                while (currentID + dif < nextID) {
-                    //System.out.println("        CURRENT SIZE " + currentSize + " MAX SIZE " + maxSize);
-                    toAdd.add(false);
-                    currentID += dif;
-                    currentSize += 1;
+
+                diff = nextID - currentID;
+                if(diff < 6120){
+                    consecutiveFalses = diff / maxByteValue;
+                    increment = diff % maxByteValue;
+
+                    for(int i = 0; i < consecutiveFalses; i++)
+                        toAdd.add(false);
+                    toAdd.add(true);
+
+                    inc.add((byte) (increment + Byte.MIN_VALUE));
+
+                    currentSize += (consecutiveFalses + 1 + Byte.SIZE) ;
+                }
+                else{
+                    System.out.println("            Saved Space in the compressed Chunk IDs");
+                    referenceIDArray.add(nextID);
+                    toAddArray.add(toAdd);
+                    incArray.add(inc);
+
+                    toAdd = new ArrayList<Boolean>();
+                    inc = new ArrayList<Byte>();
+
+                    currentSize += Integer.SIZE;
                 }
 
-                toAdd.add(true);
-                currentSize += 1;
-
-                //System.out.println("INC TO ADD => " + (byte)(nextID - currentID + Byte.MIN_VALUE));
-                inc.add((byte) (nextID - currentID + Byte.MIN_VALUE));
-                currentSize += Byte.SIZE;
                 currentID = nextID;
-
             }
         }
+
+        toAddArray.add(toAdd);
+        incArray.add(inc);
+
+/*        int a = 0;
+        for(int rid : referenceIDArray){
+            System.out.println("ReferenceID => " + rid);
+            for(boolean b : toAddArray.get(a))
+                System.out.print(b + " ");
+            System.out.println("");
+
+            for(byte v : incArray.get(a))
+                System.out.print(v + " ");
+            System.out.println("");
+
+            a++;
+        }*/
 
         //System.out.println("MAX SIZE => " + maxSize + " | CURRENTSIZE => " + currentSize);
 
         //System.out.println("\tINC SIZE => " + inc.size() + "\n\tTO ADD SIZE => " + toAdd.size() + "\n\tINVERTED TO ADO SIZ => " + invertedToAdd.size() + "\n\tPOINTER => " + pointer);
-        boolean[] toAddArray = new boolean[toAdd.size()];
-        for (int i = 0; i < toAdd.size(); i++)
-            toAddArray[i] = toAdd.get(i);
+        int referenceIDArraySize = referenceIDArray.size();
+        int[] referenceIDIntArray = new int[referenceIDArraySize];
 
-        byte[] incArray = new byte[inc.size()];
-        for (int i = 0; i < inc.size(); i++) {
-            //System.out.println("inc[" + i + "] = " + inc.get(i));
-            incArray[i] = inc.get(i);
+        for(int i = 0; i < referenceIDArraySize; i++) {
+            referenceIDIntArray[i] = referenceIDArray.get(i);
+        }
+
+        int toAddArraySize = toAddArray.size();
+        int toAddSize;
+        boolean[][] toAddArrays = new boolean[toAddArraySize][];
+        boolean[] toAddArrayPointer;
+
+        for(int i = 0; i < toAddArraySize; i++){
+            toAdd = toAddArray.get(i);
+            toAddSize = toAdd.size();
+            toAddArrayPointer= new boolean[toAddSize];
+
+            for (int j = 0; j < toAddSize; j++)
+                toAddArrayPointer[j] = toAdd.get(j);
+
+            toAddArrays[i] = toAddArrayPointer;
+        }
+
+
+        int incArraySize = incArray.size();
+        int incSize;
+        byte[][] incArrays = new byte[incArraySize][];
+        byte[] incArrayPointer;
+
+        for (int i = 0; i < incArraySize; i++) {
+            inc = incArray.get(i);
+            incSize = inc.size();
+            incArrayPointer = new byte[incSize];
+
+            for(int j = 0; j < incSize; j++){
+                incArrayPointer[j] = inc.get(j);
+            }
+
+            incArrays[i] = incArrayPointer;
         }
 
         //System.out.println("TENHO " + counter +1 + " IDS");
 
-        return new CompressedMissingChunksID(referenceID, toAddArray, incArray);
+        return new CompressedMissingChunksID(referenceIDIntArray, toAddArrays, incArrays);
     }
 
     public int[] getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
-        int numberOfIDs = cmcid.increments.length + 1;
+
+/*        int a = 0;
+        for(int rid : cmcid.referenceID){
+            System.out.println("ReferenceID => " + rid);
+            for(boolean b : cmcid.toAdd[a])
+                System.out.print(b + " ");
+            System.out.println("");
+
+            for(byte v : cmcid.increments[a])
+                System.out.print(v + " ");
+            System.out.println("");
+
+            a++;
+        }*/
+
+        int numberOfIDs = 0;
+
+        for(int i = 0; i < cmcid.referenceID.length; i++)
+            numberOfIDs += (cmcid.increments[i].length + 1);
 
         int[] res = new int[numberOfIDs];
-        int pointer = 1;
-
-        int currentID = cmcid.referenceID;
+        int pointer = 0;
         int maxValue = Byte.MAX_VALUE - Byte.MIN_VALUE;
+        int currentID;
 
-        res[0] = currentID;
 
-        int i = 0;
         int toAddAux;
+        int i;
 
-        for(int j = 0; j < cmcid.increments.length; j++){
-            toAddAux = (int)cmcid.increments[j] - Byte.MIN_VALUE;
+        for(int k = 0; k < cmcid.referenceID.length; k++) {
+            currentID = cmcid.referenceID[k];
+            res[pointer] = currentID;
+            pointer++;
 
-            while(i < cmcid.toAdd.length && !cmcid.toAdd[i]) {
-                currentID += maxValue;
-                i++;
-            }
+            i = 0;
+            for (int j = 0; j < cmcid.increments[k].length; j++) {
+                toAddAux = (int) cmcid.increments[k][j] - Byte.MIN_VALUE;
 
-            if(i < cmcid.toAdd.length){
-                currentID += toAddAux;
-                res[pointer] = currentID;
-                pointer++;
-                i++;
+                while (i < cmcid.toAdd[k].length && !cmcid.toAdd[k][i]) {
+                    currentID += maxValue;
+                    i++;
+                }
+
+                if (i < cmcid.toAdd[k].length) {
+                    currentID += toAddAux;
+                    res[pointer] = currentID;
+                    pointer++;
+                    i++;
+                }
             }
         }
 
