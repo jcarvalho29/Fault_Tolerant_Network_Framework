@@ -181,21 +181,25 @@ public class FastUnicastListener implements Runnable {
     public void changeByteArraysSize(int rtt, int dps){
         //500 = 2/1000
         int newByteArraysSize = ((dps * rtt)/500); // EXCEPTION!!!!!!!! NUMERO NEGATIVO
-        byte[][] tmp = new byte[newByteArraysSize][];
-        this.arrayLock.lock();
+        if(newByteArraysSize > 0) {
+            byte[][] tmp = new byte[newByteArraysSize][];
+            this.arrayLock.lock();
 
-        if(this.pointer != 0){
-            byte[][] byteArraysCopy = new byte[this.pointer][];
+            if (this.pointer != 0) {
+                byte[][] byteArraysCopy = new byte[this.pointer][];
 
-            System.arraycopy(this.byteArrays, 0, byteArraysCopy, 0, this.pointer);
+                System.arraycopy(this.byteArrays, 0, byteArraysCopy, 0, this.pointer);
 
-            this.byteArrays = tmp;
-            this.byteArraysSize = newByteArraysSize;
-            this.pointer = 0;
+                this.byteArrays = tmp;
+                this.byteArraysSize = newByteArraysSize;
+                this.pointer = 0;
 
-            this.Overflow.add(byteArraysCopy);
+                this.Overflow.add(byteArraysCopy);
+            }
+            this.arrayLock.unlock();
         }
-        this.arrayLock.unlock();
+        else
+            System.out.println("                CHANGEBYTEARRAYSSIZE NEGATIVO DPS " + dps + " RTT" + rtt);
     }
 
     public long getFirstCMReceivedTimestamp(){

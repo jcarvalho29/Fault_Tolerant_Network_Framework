@@ -128,7 +128,7 @@ public class TransferMultiSender implements Runnable{
                     }
                     this.TMRI_Lock.unlock();
                 }
-                System.out.println("SENT TRANSFERMETAINFO");
+                System.out.println("SENT TRANSFERMETAINFO TO " + this.destIP + " " + this.destUnicastPort);
                 this.stats.markTmiSendTime();
             }
         }

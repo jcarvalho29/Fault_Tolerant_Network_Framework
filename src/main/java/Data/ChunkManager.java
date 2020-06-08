@@ -660,7 +660,7 @@ public class ChunkManager {
         else{
             int sizeParam = 4 * maxSize;
 
-            while(res.size() != 1 && (actualMaxSize > maxSize || actualMaxSize < maxSize*0.9)) {
+            while(res.size() != 1 && (actualMaxSize > maxSize || actualMaxSize < maxSize*0.5)) {
                 res.clear();
 
                 //COPY
@@ -670,7 +670,7 @@ public class ChunkManager {
 
                 while (nmc > 0) {
                     System.out.println("A Processar Compressed MissingChunks " + nmc + " left ( MAX SIZE: " + maxSize + " )");
-                    CompressedMissingChunksID cmcID = getCompressedMissingChunksID(missingChunks, sizeParam);
+                    CompressedMissingChunksID cmcID = getCompressedMissingChunksID(missingChunks, (int)(sizeParam*0.9));
                     res.add(cmcID);
 
                     nmc = 0;
@@ -680,12 +680,13 @@ public class ChunkManager {
                 }
                 actualMaxSize = maxSize(res);
 
+
                 if(actualMaxSize > maxSize) {
                     sizeParam = (int) (sizeParam * 0.95);
                     System.out.println("DEMASIADO GRANDE " + actualMaxSize + " vs " + maxSize);
                 }
                 else {
-                    if (actualMaxSize < maxSize * 0.9) {
+                    if (actualMaxSize < maxSize * 0.5) {
                         sizeParam = (int) (sizeParam * 1.05);
                         System.out.println("DEMASIADO PEQUENO " + actualMaxSize + " vs " + maxSize);
                         //DEBUG!!!!!!!!!!!!!!!!!!!!!!!!
@@ -718,7 +719,7 @@ public class ChunkManager {
     }
 
     private void check(ArrayList<CompressedMissingChunksID> cmcids){
-
+        System.out.println("        IM STILL CHECKING THE CMCIDS");
         int numberOfMissingChunks = 0;
 
         for(int i = 0; i < this.mi.missingChunks.length; i++) {
@@ -744,13 +745,12 @@ public class ChunkManager {
             }
 
 
-            int j = 0;
-
+            if(convertedCMCIDs.size() != numberOfMissingChunks)
+                System.out.println("WHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHATWHAT\n" + convertedCMCIDs.size() + " " + numberOfMissingChunks);
             for (int i = 0; i < numberOfMissingChunks; i++) {
                 if (this.mi.missingChunks[i]) {
                     if (!convertedCMCIDs.contains(i + Integer.MIN_VALUE)) {
                         System.out.println("                                        DOES NOT HAVE i + Integer.MIN_VALUE " + (i + Integer.MIN_VALUE));
-                        j++;
                     }
                 }
             }
@@ -800,13 +800,16 @@ public class ChunkManager {
 
         int totalNumberOfChunks = this.mi.numberOfChunks;
 
-        ArrayList<Integer> referenceIDArray = new ArrayList<Integer>();
-        ArrayList<ArrayList<Boolean>> toAddArray = new ArrayList<ArrayList<Boolean>>();
-        ArrayList<ArrayList<Byte>> incArray = new ArrayList<ArrayList<Byte>>();
+        int[] referenceIDArray = new int[2];
+        boolean[][] toAddArray = new boolean[2][];
+        byte[][] incArray = new byte[2][];
+        int groupPointer = 0;
 
         int referenceID;
-        ArrayList<Boolean> toAdd = new ArrayList<Boolean>();
-        ArrayList<Byte> inc = new ArrayList<Byte>();
+        boolean[] toAdd = new boolean[300];
+        int toAddPointer = 0;
+        byte[] inc = new byte[300];
+        int incPointer = 0;
 
         int currentID = 0;
         int mcPointer = 0;
@@ -817,7 +820,7 @@ public class ChunkManager {
                 mcPointer = i+1;
                 referenceID = i + Integer.MIN_VALUE;
                 currentID = referenceID;
-                referenceIDArray.add(referenceID);
+                referenceIDArray[groupPointer] = referenceID;
             }
 
         int currentSize = Integer.SIZE;
@@ -848,22 +851,103 @@ public class ChunkManager {
                     consecutiveFalses = diff / maxByteValue;
                     increment = diff % maxByteValue;
 
-                    for(int i = 0; i < consecutiveFalses; i++)
-                        toAdd.add(false);
-                    toAdd.add(true);
+                    //verificar espaço do array toAdd
+                    if(toAddPointer + (consecutiveFalses + 1) > toAdd.length){
+                        boolean[] newToAdd = new boolean[toAdd.length*2];
+                        System.arraycopy(toAdd, 0, newToAdd, 0, toAddPointer);
+                        toAdd = newToAdd;
+                    }
 
-                    inc.add((byte) (increment + Byte.MIN_VALUE));
+                    //preencher o Array toAdd
+                    for(int i = 0; i < consecutiveFalses; i++) {
+                        toAdd[toAddPointer] = false;
+                        toAddPointer++;
+                    }
+                    toAdd[toAddPointer] = true;
+                    toAddPointer++;
+
+                    //verificar espaço no array inc
+                    if(incPointer + 1 > inc.length){
+                        byte[] newInc = new byte[inc.length*2];
+                        System.arraycopy(inc, 0, newInc, 0, incPointer);
+                        inc = newInc;
+                    }
+
+                    //adicionar elemento ao array inc
+
+                    inc[incPointer] = (byte) (increment + Byte.MIN_VALUE);
+                    incPointer++;
 
                     currentSize += (consecutiveFalses + 1 + Byte.SIZE) ;
                 }
                 else{
                     System.out.println("            Saved Space in the compressed Chunk IDs");
-                    referenceIDArray.add(nextID);
-                    toAddArray.add(toAdd);
-                    incArray.add(inc);
 
-                    toAdd = new ArrayList<Boolean>();
-                    inc = new ArrayList<Byte>();
+                    //Crop array toAdd to size
+                    boolean[] croppedToAdd = new boolean[toAddPointer];
+                    System.arraycopy(toAdd, 0, croppedToAdd, 0, toAddPointer);
+
+                    //Adicionar o array à lista de grupos
+                    toAddArray[groupPointer] = croppedToAdd;
+                    toAddPointer = 0;
+
+                    //Crop array inc to size
+                    byte[] croppedInc = new byte[incPointer];
+                    System.arraycopy(inc, 0, croppedInc, 0, incPointer);
+
+                    //Adicionar o array à lista de grupos
+                    incArray[groupPointer] = croppedInc;
+                    incPointer = 0;
+
+                    toAdd = new boolean[300];
+                    inc = new byte[300];
+
+                    groupPointer++;
+
+                    /////////////////////////////////////////////////////////////////////////////////////////////
+                    //New group//////////////////////////////////////////////////////////////////////////////////
+                    /////////////////////////////////////////////////////////////////////////////////////////////
+
+                    //DEBUG!!!!!
+                    if(groupPointer + 1 > referenceIDArray.length){
+
+                       /* System.out.println("BEFORE RID EXTENSION");
+                        System.out.println(Arrays.toString(referenceIDArray));*/
+
+                        //verificar espaço no array ReferenceIDArray
+                        int[] newReferenceIDArray = new int[referenceIDArray.length+2];
+                        System.arraycopy(referenceIDArray, 0, newReferenceIDArray, 0, groupPointer);
+                        referenceIDArray = newReferenceIDArray;
+
+                        /*System.out.println("AFTER RID EXTENSION");
+                        System.out.println(Arrays.toString(referenceIDArray));
+
+                        System.out.println("BEFORE INCARRAY EXTENSION");
+                        System.out.println(Arrays.toString(incArray));*/
+
+                        //verificar espaço no array incArray
+                        byte[][] newIncArray = new byte[incArray.length+2][];
+                        System.arraycopy(incArray, 0, newIncArray, 0, groupPointer);
+                        incArray = newIncArray;
+
+                        /*System.out.println("AFTER INCARRAY EXTENSION");
+                        System.out.println(Arrays.toString(incArray));
+
+
+                        System.out.println("BEFORE TOADD EXTENSION ");
+                        System.out.println(Arrays.toString(toAdd));
+*/
+                        //verificar espaço no toAddArray
+                        boolean[][] newToAddArray = new boolean[toAddArray.length+2][];
+                        System.arraycopy(toAddArray, 0, newToAddArray, 0, groupPointer);
+                        toAddArray = newToAddArray;
+
+                       /* System.out.println("AFTER TOADD EXTENSION ");
+                        System.out.println(Arrays.toString(toAdd));*/
+                    }
+
+                    //Adicionar elemento ao array referenceIDArray
+                    referenceIDArray[groupPointer] = nextID;
 
                     currentSize += Integer.SIZE;
                 }
@@ -872,70 +956,48 @@ public class ChunkManager {
             }
         }
 
-        toAddArray.add(toAdd);
-        incArray.add(inc);
+        //Crop array toAdd to size
+        boolean[] croppedToAdd = new boolean[toAddPointer];
+        System.arraycopy(toAdd, 0, croppedToAdd, 0, toAddPointer);
 
-/*        int a = 0;
-        for(int rid : referenceIDArray){
-            System.out.println("ReferenceID => " + rid);
-            for(boolean b : toAddArray.get(a))
-                System.out.print(b + " ");
-            System.out.println("");
+        //Adicionar o array à lista de grupos
+        toAddArray[groupPointer] = croppedToAdd;
 
-            for(byte v : incArray.get(a))
-                System.out.print(v + " ");
-            System.out.println("");
+        //Crop array inc to size
+        byte[] croppedInc = new byte[incPointer];
+        System.arraycopy(inc, 0, croppedInc, 0, incPointer);
 
-            a++;
-        }*/
+        //Adicionar o aray à lista de grupos
+        incArray[groupPointer] = croppedInc;
 
-        //System.out.println("MAX SIZE => " + maxSize + " | CURRENTSIZE => " + currentSize);
+        groupPointer++;
 
-        //System.out.println("\tINC SIZE => " + inc.size() + "\n\tTO ADD SIZE => " + toAdd.size() + "\n\tINVERTED TO ADO SIZ => " + invertedToAdd.size() + "\n\tPOINTER => " + pointer);
-        int referenceIDArraySize = referenceIDArray.size();
-        int[] referenceIDIntArray = new int[referenceIDArraySize];
+        /*System.out.println("BEFORE RID CROP ");
+        System.out.println(Arrays.toString(referenceIDArray));*/
+        //Crop referenceIDArray
+        int[] croppedRID = new int[groupPointer];
+        System.arraycopy(referenceIDArray, 0, croppedRID, 0, groupPointer);
 
-        for(int i = 0; i < referenceIDArraySize; i++) {
-            referenceIDIntArray[i] = referenceIDArray.get(i);
-        }
+       /* System.out.println("AFTER RID CROP ");
+        System.out.println(Arrays.toString(croppedRID));*/
 
-        int toAddArraySize = toAddArray.size();
-        int toAddSize;
-        boolean[][] toAddArrays = new boolean[toAddArraySize][];
-        boolean[] toAddArrayPointer;
+        /*System.out.println("BEFORE TAA CROP ");
+        System.out.println(Arrays.toString(toAddArray));*/
+        //Crop toAddArray
+        boolean[][] croppedTAA = new boolean[groupPointer][];
+        System.arraycopy(toAddArray, 0, croppedTAA, 0, groupPointer);
+/*        System.out.println("AFTER TAA CROP ");
+        System.out.println(Arrays.toString(croppedTAA));*/
 
-        for(int i = 0; i < toAddArraySize; i++){
-            toAdd = toAddArray.get(i);
-            toAddSize = toAdd.size();
-            toAddArrayPointer= new boolean[toAddSize];
-
-            for (int j = 0; j < toAddSize; j++)
-                toAddArrayPointer[j] = toAdd.get(j);
-
-            toAddArrays[i] = toAddArrayPointer;
-        }
-
-
-        int incArraySize = incArray.size();
-        int incSize;
-        byte[][] incArrays = new byte[incArraySize][];
-        byte[] incArrayPointer;
-
-        for (int i = 0; i < incArraySize; i++) {
-            inc = incArray.get(i);
-            incSize = inc.size();
-            incArrayPointer = new byte[incSize];
-
-            for(int j = 0; j < incSize; j++){
-                incArrayPointer[j] = inc.get(j);
-            }
-
-            incArrays[i] = incArrayPointer;
-        }
-
-        //System.out.println("TENHO " + counter +1 + " IDS");
-
-        return new CompressedMissingChunksID(referenceIDIntArray, toAddArrays, incArrays);
+        /*System.out.println("BEFORE IA CROP ");
+        System.out.println(Arrays.toString(incArray));*/
+        //Crop incArray
+        byte[][] croppedIA = new byte[groupPointer][];
+        System.arraycopy(incArray, 0, croppedIA, 0, groupPointer);
+        /*System.out.println("AFTER IA CROP ");
+        System.out.println(Arrays.toString(croppedIA));
+*/
+        return new CompressedMissingChunksID(croppedRID, croppedTAA, croppedIA);
     }
 
     public int[] getIDsFromCompressedMissingChunksID(CompressedMissingChunksID cmcid){
@@ -956,8 +1018,11 @@ public class ChunkManager {
 
         int numberOfIDs = 0;
 
-        for(int i = 0; i < cmcid.referenceID.length; i++)
-            numberOfIDs += (cmcid.increments[i].length + 1);
+        for(int i = 0; i < cmcid.referenceID.length; i++) {
+            numberOfIDs++;
+            if(cmcid.increments[i] != null)
+                numberOfIDs += cmcid.increments[i].length;
+        }
 
         int[] res = new int[numberOfIDs];
         int pointer = 0;
@@ -974,7 +1039,7 @@ public class ChunkManager {
             pointer++;
 
             i = 0;
-            for (int j = 0; j < cmcid.increments[k].length; j++) {
+            for (int j = 0; cmcid.increments[k] != null && j < cmcid.increments[k].length; j++) {
                 toAddAux = (int) cmcid.increments[k][j] - Byte.MIN_VALUE;
 
                 while (i < cmcid.toAdd[k].length && !cmcid.toAdd[k][i]) {

@@ -45,6 +45,8 @@ public class ListenerMainUnicast implements Runnable{
             this.unicastSocket = new DatagramSocket(null);
             InetSocketAddress isa = new InetSocketAddress(this.ip, this.unicastPort);
             this.unicastSocket.bind(isa);
+            System.out.println("Listening to " + this.ip + " " + this.unicastPort);
+
         } catch (SocketException e) {
             e.printStackTrace();
         }
@@ -85,7 +87,7 @@ public class ListenerMainUnicast implements Runnable{
                 }
 
 
-                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, this.NICCapacity,1);
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), tmi, this.MTU, this.NICCapacity,10);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
                 this.infoReceiverManager.put(tmi.ID, trm);

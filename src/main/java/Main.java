@@ -90,13 +90,13 @@ public class Main{
 
                     case 4: {
                         ChunkManager cm = dm.documents.get(docHash).cm;
-                        startSender(MacAddress,3333, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).documentName);
+                        startSender(MacAddress,15000, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).documentName);
                         break;
                     }
 
                     case 5:{
                         ChunkManager cm = dm.messages.get(msgHash);
-                        startSender(MacAddress,3333, 1500, cm, cm.getCMMI(), null);
+                        startSender(MacAddress,15000, 1500, cm, cm.getCMMI(), null);
                         break;
                     }
                     case 6:{
@@ -142,7 +142,7 @@ public class Main{
             e.printStackTrace();
         }
 
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 15000, mtu, 100);
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 15000, mtu, 1000);
         Thread t = new Thread(mainListener);
 
         t.start();
