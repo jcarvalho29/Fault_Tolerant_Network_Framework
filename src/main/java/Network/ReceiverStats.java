@@ -215,7 +215,7 @@ public class ReceiverStats {
 
         long time = System.currentTimeMillis();
         //System.out.println(this.transferCycleStartTime);
-        int duration =(int) (time - this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1));//!!!! EXCEPTION OUT OF BOUNDS
+        int duration =(int) (time - this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1));//!!!! EXCEPTION OUT OF BOUNDS FIRST CYCLE
         //System.out.println(time + " - " + this.transferCycleStartTime.get(this.transferCycleStartTime.size()-1) + " = " + duration);
         this.transferCycleEndTime.add(time);
 

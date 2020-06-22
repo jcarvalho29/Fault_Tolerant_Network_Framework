@@ -66,8 +66,8 @@ public class DataManager {
 
     /*
     * Constructs a Document object that uses a Data.ChunkManager to divide the file provided by the combination of localFilePath/filename
-    * into chunks that can be found on the folder root/MacAddress/(FileHash)/Chunks.
-    * After the construction of the Document object, it is registered the MacAddress that solicited the creation of this file
+    * into chunks that can be found on the folder root/nodeIdentifier/(FileHash)/Chunks.
+    * After the construction of the Document object, it is registered the nodeIdentifier that solicited the creation of this file
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
     public String newDocument(String localDocumentPath, String hashAlgorithm, int maxDatagramSize){
@@ -127,8 +127,8 @@ public class DataManager {
 
     /*
     * Constructs a Document object that uses a Data.ChunkManager to divide the file provided by the combination of localFilePath/filename
-     * into chunks that can be found on the folder root/MacAddress/(FileHash)/Chunks.
-     * After the construction of the Document object, it is registered the MacAddress that solicited the creation of this file
+     * into chunks that can be found on the folder root/nodeIdentifier/(FileHash)/Chunks.
+     * After the construction of the Document object, it is registered the nodeIdentifier that solicited the creation of this file
      * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
      * This constructor will limit the number of chunks in Ram to maxChunksLoadedAtaTime
     * */
@@ -233,7 +233,7 @@ public class DataManager {
     }
 
     /*
-    * Adds the provided chunks to the Document that the provided MacAddress/Hash identify. This is intended to be used with the
+    * Adds the provided chunks to the Document that the provided nodeIdentifier/Hash identify. This is intended to be used with the
     * Documents that are being received and not all chunks are present in Memory.
     * */
     private boolean addChunksToDocument (String hash, ChunkMessage[] chunks){
@@ -278,7 +278,7 @@ public class DataManager {
     }
 
     /*
-    * This will try to rebuild a Document from all the chunks that ar in root/MacAddress/hash/chunks.
+    * This will try to rebuild a Document from all the chunks that ar in root/nodeIdentifier/hash/chunks.
     * It is required to all chunks to be in Memory
     * */
     public Boolean assembleDocument(String Hash, String destinationPath){
@@ -294,7 +294,7 @@ public class DataManager {
         System.out.println(this.documents.containsKey(Hash));
         System.out.println(this.dmMI.isDocumentFull.get(Hash));
 
-        if(this.dmMI.cmHashs.contains(Hash)){//CHECK THIS
+        if(this.dmMI.cmHashs.contains(Hash)){
             System.out.println("CMHASH HAS HASH");
             if(this.documents.containsKey(Hash) && this.dmMI.isDocumentFull.get(Hash)){//CHECK THIS
                 System.out.println("DOCUMENTS HAS HASH AND DOCUMENT IS FULL");
@@ -318,7 +318,7 @@ public class DataManager {
 
     /*
     * Constructs a ChunkManager object and creates all the chunks needed to represent the message byte[]. These chunks will
-    * be present in root/MacAddress/hash/chunks.
+    * be present in root/nodeIdentifier/hash/chunks.
     * There's 2 versions, with and without the Hash Algorithm specification to use. By omission, the default is sha-256
     * */
     public String newMessage(byte[] info, int maxDatagramSize, String hashAlgorithm){
@@ -401,7 +401,7 @@ public class DataManager {
     }
 
     /*
-     * Adds the provided chunks to the ChunkManager that the provided MacAddress/Hash identify. This is intended to be used with the
+     * Adds the provided chunks to the ChunkManager that the provided nodeIdentifier/Hash identify. This is intended to be used with the
      * ChunkManager that are being received and not all chunks are present in Memory.
      * */
     private boolean addChunksToMessage(String Hash, ChunkMessage[] chunks){
@@ -478,12 +478,11 @@ public class DataManager {
 
 
     /*
-    * Register a Hash under the given MacAddress
-    * If a MacAddress isn't registered yet, this will register it
+    * Register a Hash under the given nodeIdentifier
+    * If a nodeIdentifier isn't registered yet, this will register it
     * */
     private void registerHash(String hash){
         // registar macaddress + info hash no hashmap
-        ArrayList <String> hashs;
         if(!this.dmMI.cmHashs.contains(hash)) {
             this.dmMI.cmHashs.add(hash);
             System.out.println("REGISTERED HASH " + hash);
@@ -584,9 +583,7 @@ public class DataManager {
         this.messages = new HashMap<String, ChunkManager>();
 
         for(String hash : this.dmMI.cmHashs){
-            cm = new ChunkManager(root);
-
-            cm.readDocumentMetaInfoFromFile(hash);
+            cm = new ChunkManager(root, hash);
 
             if(this.dmMI.documentsNames.containsKey(hash)){
                 d = new Document(root, this.dmMI.documentsNames.get(hash), cm);

@@ -24,14 +24,30 @@ public class ChunkManager {
     private ReentrantLock mi_Lock;
     private ReentrantLock missingChunks_Lock;
 
+
+    private ReentrantLock memoryWriter_Lock;
+    private boolean isThreadWriting;
+    private ArrayList<ChunkMessage[]> chunkMessagesToWrite;
+    public boolean isWrittenToMemory;
+    private long numberOfWrittenChunks;
+
     /*
     * Creates a basic ChunkManager object that is used to initialize the class from a DocumentMetaInfo file
     * */
-    public ChunkManager(String Root){
+    public ChunkManager(String Root, String hash){
         Root = folderPathNormalizer(Root);
         this.Root = Root;
         this.mi_Lock = new ReentrantLock();
         this.missingChunks_Lock = new ReentrantLock();
+        readDocumentMetaInfoFromFile(hash);
+
+        this.isWrittenToMemory = this.mi.full;
+        if(!this.isWrittenToMemory){
+            this.memoryWriter_Lock = new ReentrantLock();
+            this.isThreadWriting = false;
+            this.chunkMessagesToWrite = new ArrayList<ChunkMessage[]>();
+            this.numberOfWrittenChunks = this.mi.numberOfChunksInArray; // PODE HAVER PROBLEMAS QUANDO O RECEPTOR VAI ABAIXO ENQUANTO A TRANSFERENCIA ESTA A DECORRER
+        }
 
     }
 
@@ -70,12 +86,19 @@ public class ChunkManager {
         this.mi.HashAlgorithm = hashAlgorithm;
 
         this.missingChunks_Lock = new ReentrantLock();
+
         this.mi.missingChunks = new boolean[numberOfChunks];
         this.mi.missingChunks[0] = true;
-
         for (int i = 1; i < numberOfChunks; i += i) {
             System.arraycopy(this.mi.missingChunks, 0, this.mi.missingChunks, i, Math.min((numberOfChunks - i), i));
         }
+
+        this.memoryWriter_Lock = new ReentrantLock();
+        this.isThreadWriting = false;
+        this.chunkMessagesToWrite = new ArrayList<ChunkMessage[]>();
+        this.isWrittenToMemory = false;
+        this.numberOfWrittenChunks = 0;
+
 
         writeDocumentMetaInfoToFile();
     }
@@ -111,8 +134,16 @@ public class ChunkManager {
         File hashFolder = new File(this.Root + "/" + this.mi.Hash + "/");
         while (!hashFolder.exists() && !hashFolder.isDirectory() && !hashFolder.mkdir()) ;
 
-        writeChunksToFolder(chunks);
-        this.mi.full = true;
+        this.mi.full = false;
+        int writtenChunks = 0;
+
+        while (!this.mi.full){
+            writtenChunks += writeChunksToFolder(chunks);
+
+            if(writtenChunks == this.mi.numberOfChunks);
+            this.mi.full = true;
+        }
+        this.isWrittenToMemory = true;
 
         writeDocumentMetaInfoToFile();
     }
@@ -161,6 +192,7 @@ public class ChunkManager {
             deleter.delete();
         }
         this.mi.full = true;
+        this.isWrittenToMemory = true;
 
         File oldChunksFolder = new File(oldpath);
         oldChunksFolder.delete();
@@ -306,7 +338,7 @@ public class ChunkManager {
     *   FileChunk[] fcs => Array of FileChunks to be written
     *   int size => Size of the FileChunk Array
     */
-    private void writeChunksToFolder(Chunk[] chunks){
+    private int writeChunksToFolder(Chunk[] chunks){
         int i;
         int size = chunks.length;
 
@@ -314,6 +346,7 @@ public class ChunkManager {
         File ficheiro = new File(folderPath);
         File filePointer;
         String path;
+        int writtenChunks = 0;
 
         while((!ficheiro.exists() && !ficheiro.isDirectory()) && !ficheiro.mkdir());
 
@@ -328,6 +361,7 @@ public class ChunkManager {
                 if(!filePointer.exists()) {
                     file = Paths.get(path);
                     Files.write(file, fc.Chunk);
+                    writtenChunks++;
                 }
                 else
                     System.out.println("REPEATED CHUNK" + fc.place);
@@ -336,6 +370,8 @@ public class ChunkManager {
                 e.printStackTrace();
             }
         }
+
+        return writtenChunks;
     }
 
     /*
@@ -471,12 +507,19 @@ public class ChunkManager {
 */
         this.mi_Lock.lock();
         int i = 0;
+        int id;
         try {
-            for (; i < chunkMessages.length; i++) {
+            while(i < chunkMessages.length) {
                 //missingc[chunkMessages[i].chunk.place - Integer.MIN_VALUE] = false;
-                this.mi.missingChunks[chunkMessages[i].chunk.place - Integer.MIN_VALUE] = false;
-                this.mi.numberOfChunksInArray++;
-                this.mi.chunksSize += chunkMessages[i].chunk.Chunk.length;
+                id = chunkMessages[i].chunk.place - Integer.MIN_VALUE;
+                if(this.mi.missingChunks[id]) {
+                    this.mi.missingChunks[id] = false;
+                    this.mi.numberOfChunksInArray++;
+                    this.mi.chunksSize += chunkMessages[i].chunk.Chunk.length;
+                }
+                else
+                    System.out.println("REPEATED CHUNK NO ADDCHUNKS");
+                i++;
             }
         }
         catch (Exception e){
@@ -501,23 +544,44 @@ public class ChunkManager {
         this.mi_Lock.lock();
             if (this.mi.numberOfChunksInArray == this.mi.numberOfChunks)
                     this.mi.full = true;
+            if(this.mi.numberOfChunksInArray > this.mi.numberOfChunks)
+                System.out.println("                            MAIS CHUNKS DO QUE O QUE DEVIA DE TER (ADDCHUNKS");
 
         this.mi_Lock.unlock();
 
         updateDocumentMetaInfoFile();
 
         new Thread(() ->{
-            //System.out.println("            Inside Writing THREAD");
 
-            //long beforeWriting = System.currentTimeMillis();
-            Chunk[] chunks = new Chunk[chunkMessages.length];
-            for(int j = 0; j < chunks.length; j++)
-                chunks[j] = chunkMessages[j].chunk;
+            this.memoryWriter_Lock.lock();
+            this.chunkMessagesToWrite.add(chunkMessages);
 
-            writeChunksToFolder(chunks);
-            //long afterWriting = System.currentTimeMillis();
+            if(!this.isThreadWriting) {
+                this.isThreadWriting = true;
+                while (this.chunkMessagesToWrite.size() > 0) {
+                    ChunkMessage[] cm = this.chunkMessagesToWrite.get(0);
+                    this.chunkMessagesToWrite.remove(0);
 
-            //System.out.println("            TIME SPENT WRITTING " + (afterWriting - beforeWriting) + " ms ( " + chunks.size() + " Chunks )");
+                    this.memoryWriter_Lock.unlock();
+
+                    //long beforeWriting = System.currentTimeMillis();
+                    int writtenChunks = 0;
+                    Chunk[] chunks = new Chunk[cm.length];
+                    for (int j = 0; j < chunks.length; j++)
+                        chunks[j] = cm[j].chunk;
+
+                    writtenChunks += writeChunksToFolder(chunks);
+                    //long afterWriting = System.currentTimeMillis();
+
+                    //System.out.println("            TIME SPENT WRITTING " + (afterWriting - beforeWriting) + " ms ( " + chunks.size() + " Chunks )");
+                    this.memoryWriter_Lock.lock();
+                    this.numberOfWrittenChunks += writtenChunks;
+                }
+                this.isThreadWriting = false;
+                if(this.numberOfWrittenChunks == this.mi.numberOfChunks)
+                    this.isWrittenToMemory = true;
+            }
+            this.memoryWriter_Lock.unlock();
         }).start();
 
         return this.mi.full;
@@ -692,12 +756,22 @@ public class ChunkManager {
                         //DEBUG!!!!!!!!!!!!!!!!!!!!!!!!
                         if(actualMaxSize == Integer.MIN_VALUE){
                             System.out.println("RES SIZE = " + res.size());
-                            System.out.println("THIS.MISSING CHUNKS " + this.mi.missingChunks);
-                            System.out.println("MISSING CHUNKS " + missingChunks);
+
+                            boolean isThereMissingChunk = false;
+                            for(boolean b : this.mi.missingChunks)
+                                isThereMissingChunk = isThereMissingChunk || b;
+
+                            System.out.println("IS THERE ANY THIS.MISSING CHUNKS " + isThereMissingChunk);
+
+                            isThereMissingChunk = false;
+                            for(boolean b : missingChunks)
+                                isThereMissingChunk = isThereMissingChunk || b;
+                            System.out.println("IS THERE ANY MISSING CHUNKS " + isThereMissingChunk);
+
                             System.out.println("NMC " + nmc);
                             System.out.println("RES VALUES");
                             for (CompressedMissingChunksID c : res)
-                                System.out.println(getIDsFromCompressedMissingChunksID(c));
+                                System.out.println(Arrays.toString(getIDsFromCompressedMissingChunksID(c)));
                             try {
                                 Thread.sleep(10000);
                             } catch (InterruptedException e) {
@@ -713,7 +787,7 @@ public class ChunkManager {
         System.out.println("FINAL ACTUALMAXSIZE => " + actualMaxSize);
 
         //Debug
-        check(res);
+        //check(res);
 
         return res;
     }

@@ -17,7 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class FastUnicastSender implements Runnable{
 
 
-    private InetAddress IP;
+    private InetAddress destIP;
     private int destPort;
 
     private int dpPS;
@@ -27,12 +27,16 @@ public class FastUnicastSender implements Runnable{
 
     private ReentrantLock dpsLock;
     private DatagramSocket ds;
+    private DatagramPacket packet;
+
+    private ReentrantLock packetLock;
 
     private ChunkManager cm;
     private ArrayList<Chunk[]> chunkArrays;
 
     private int ID;
 
+    private boolean[] chunksIDToSend;
     private ArrayList<int[]> chunkIDsArray;
 
     private ReentrantLock chunkIDsLock;
@@ -42,7 +46,7 @@ public class FastUnicastSender implements Runnable{
 
     public FastUnicastSender(int ID, InetAddress IP, int destPort, ChunkManager cm, int[] chunkIDs, int dpPS){
 
-        this.IP = IP;
+        this.destIP = IP;
         this.destPort = destPort;
         this.dpPS = dpPS;
         this.sleeptimeMilliSeconds = 1000 / this.dpPS;
@@ -68,12 +72,27 @@ public class FastUnicastSender implements Runnable{
         this.chunkIDsArray = new ArrayList<int[]>();
         this.chunkIDsArray.add(chunkIDs);
 
+        this.chunksIDToSend = new boolean[this.cm.mi.numberOfChunks];
+
+        // Fill boolean[] with false
+        this.chunksIDToSend[0] = false;
+
+        for (int i = 1; i < this.chunksIDToSend.length; i += i) {
+            System.arraycopy(this.chunksIDToSend, 0, this.chunksIDToSend, i, Math.min((this.chunksIDToSend.length - i), i));
+        }
+
+        for(int i = 0; i < chunkIDs.length; i++){
+            this.chunksIDToSend[chunkIDs[i] - Integer.MIN_VALUE] = true;
+        }
+
         this.chunkIDsLock = new ReentrantLock();
         this.isRunning_lock = new ReentrantLock();
 
 
         this.isRunning = false;
 
+        this.packet = new DatagramPacket(new byte[1], 1, this.destIP, this.destPort);
+        this.packetLock = new ReentrantLock();
         try {
             this.ds = new DatagramSocket();
             this.ds.setSendBufferSize(3000000);
@@ -81,6 +100,18 @@ public class FastUnicastSender implements Runnable{
         catch (Exception e){
             e.printStackTrace();
         }
+    }
+
+    public void changeDestIP(InetAddress newDestIP){
+        System.out.println("NEW DEST IP | OLD => " + this.destIP + "vs NEW => " + newDestIP);
+
+        this.destIP = newDestIP;
+
+        this.packetLock.lock();
+
+        this.packet.setAddress(this.destIP);
+
+        this.packetLock.unlock();
     }
 
     public void run() {
@@ -102,7 +133,6 @@ public class FastUnicastSender implements Runnable{
                 chunks = this.cm.getMissingChunks(chunkIDs);
                 chunkIDs = null;
             } else {
-                int chunkIDsSize = chunkIDs.length;
                 chunks = this.cm.getMissingChunks(copyArrayListSection(chunkIDs,200));
                 chunkIDs = chopArray(chunkIDs, 200);
             }
@@ -120,6 +150,7 @@ public class FastUnicastSender implements Runnable{
         long cycleStart = System.currentTimeMillis();
         Chunk[] chunksToSend;
         int pointer;
+        Chunk chunk;
 
         this.isRunning_lock.lock();
             while(this.chunkArrays.size() > 0){
@@ -137,13 +168,19 @@ public class FastUnicastSender implements Runnable{
 
 
                         //Send Chunk
-                        ChunkMessage ch = new ChunkMessage(this.ID, chunksToSend[pointer]);
+                        chunk = chunksToSend[pointer];
+                        ChunkMessage ch = new ChunkMessage(this.ID, chunk);
                         byte[] serializedChunkHeader = getBytesFromObject(ch);
                         try{
-                            DatagramPacket packet = new DatagramPacket(serializedChunkHeader, serializedChunkHeader.length, this.IP, this.destPort);
+                            this.packetLock.lock();
 
-                            this.ds.send(packet);
-                            //System.out.println("SENT CHUNK " + this.IP + " " + this.destPort);
+                            this.packet.setData(serializedChunkHeader);
+                            this.packet.setLength(serializedChunkHeader.length);
+
+                            this.ds.send(this.packet);
+                            this.chunksIDToSend[chunk.place - Integer.MIN_VALUE] = false;
+                            this.packetLock.unlock();
+
                         }
                         catch (IOException e) {
                             try {
@@ -241,9 +278,8 @@ public class FastUnicastSender implements Runnable{
                 ex.printStackTrace();
             }
         }
-        byte[] data = bos.toByteArray();
 
-        return data;
+        return bos.toByteArray();
     }
 
     public boolean addChunksToSend(int[] newChunksIDs) {
@@ -254,6 +290,9 @@ public class FastUnicastSender implements Runnable{
 
         this.chunkIDsLock.lock();
         this.chunkIDsArray.add(newChunksIDs);
+        for(int i = 0; i < newChunksIDs.length; i++){
+            this.chunksIDToSend[newChunksIDs[i] - Integer.MIN_VALUE] = true;
+        }
         this.chunkIDsLock.unlock();
         this.isRunning_lock.unlock();
 
@@ -297,5 +336,15 @@ public class FastUnicastSender implements Runnable{
         System.arraycopy(original, length, newOriginal, 0, original.length-length);
 
         return newOriginal;
+    }
+
+    public boolean[] getChunksIDToSend(){
+        this.packetLock.lock();
+        boolean[] copy = new boolean[this.chunksIDToSend.length];
+
+        System.arraycopy(this.chunksIDToSend, 0, copy, 0, this.chunksIDToSend.length);
+        this.packetLock.unlock();
+
+        return copy;
     }
 }

@@ -18,33 +18,11 @@ import java.io.File;
 public class Main{
 
 
-    public static void main(String args[]) throws SocketException {
-        Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
-        String MacAddress = "EMPTY";
-        ArrayList<InetAddress> LocalLinks = new ArrayList<InetAddress>();
-        MulticastSocket ms;
-        DatagramSocket ds;
-        byte[] mac;
-        for (NetworkInterface netint : Collections.list(nets)) {
-            //displayInterfaceInformation(netint);
+    public static void main(String args[]){
+        Random rand = new Random();
+        int nodeIdentifier = rand.nextInt();
 
-
-            Enumeration<InetAddress> inetAddresses = netint.getInetAddresses();
-            for (InetAddress inetAddress : Collections.list(inetAddresses)) {
-                if(inetAddress.isLinkLocalAddress()){
-                    LocalLinks.add(inetAddress);
-                    StringBuilder sb = new StringBuilder();
-                    mac = netint.getHardwareAddress();
-                    for (int i = 0; i < mac.length; i++) {
-                        sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? "-" : ""));
-                    }
-                    MacAddress = sb.toString();
-                }
-            }
-        }
-
-
-        String ftnfpath = createFTNFFolderStructure(MacAddress);
+        String ftnfpath = createFTNFFolderStructure();
 
         //out.println(path);
         DataManager dm = new DataManager(ftnfpath, true);
@@ -60,11 +38,12 @@ public class Main{
             try {
                 out.println("0 - LOAD DOCUMENT jar");
                 out.println("1 - LOAD DOCUMENT 100MB.zip");
-                out.println("2 - LOAD MESSAGE");
-                out.println("3 - START LISTENER");
-                out.println("4 - SEND DOCUMENT");
-                out.println("5 - SEND MESSAGE");
-                out.println("6 - MOUNT DOC");
+                out.println("2 - LOAD DOCUMENT 1GB.zip");
+                out.println("3 - LOAD MESSAGE");
+                out.println("4 - START LISTENER");
+                out.println("5 - SEND DOCUMENT");
+                out.println("6 - SEND MESSAGE");
+                out.println("7 - MOUNT DOC");
 
                     String option = reader.readLine();
 
@@ -79,27 +58,32 @@ public class Main{
                         break;
                     }
                     case 2: {
-                        msgHash = createMessage(dm, 1300);
+                        docHash = createDocument(dm, 1300, "1GB.zip");
                         break;
                     }
 
                     case 3: {
-                        startMainListener(dm, 1500);
+                        msgHash = createMessage(dm, 1300);
                         break;
                     }
 
                     case 4: {
-                        ChunkManager cm = dm.documents.get(docHash).cm;
-                        startSender(MacAddress,15000, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).documentName);
+                        startMainListener(dm, 3333);
                         break;
                     }
 
-                    case 5:{
-                        ChunkManager cm = dm.messages.get(msgHash);
-                        startSender(MacAddress,15000, 1500, cm, cm.getCMMI(), null);
+                    case 5: {
+                        ChunkManager cm = dm.documents.get(docHash).cm;
+                        startSender(nodeIdentifier, 3333, 4444, 1500, cm, cm.getCMMI(), dm.documents.get(docHash).documentName);
                         break;
                     }
+
                     case 6:{
+                        ChunkManager cm = dm.messages.get(msgHash);
+                        startSender(nodeIdentifier, 3333, 4444, 1500, cm, cm.getCMMI(), null);
+                        break;
+                    }
+                    case 7:{
                         mountFile(dm);
                         break;
                     }
@@ -108,47 +92,78 @@ public class Main{
                 e.printStackTrace();
             }
         }
-
-/*
-        dm.assembleDocument(MacAddress, docHash, "");
-
-
-
-
-        if(dm.isReadyToBeSent(docHash)) {
-            sc.schedule("127.0.0.1", 5, 3000, docHash);
-        }
-        if(!sc.isScheduled(docHash))
-            dm.deleteDocument("myMAC", docHash);
-
-        if(dm.isReadyToBeSent(msgHash))
-            sc.schedule("127.0.0.1", 3, 3000, msgHash);
-
-        sc.editPriority("127.0.0.1", 3, 1, msgHash);
-
-        sc.editIP("127.0.0.1", "127.0.0.2", 1, msgHash);
-        sc.editPort("127.0.0.2", 1, msgHash, 2000);
-  */
     }
 
-    private static void startMainListener(DataManager dm, int mtu){
-        out.println("GIVE ME A IP TO LISTEN");
-        BufferedReader reader =
-                new BufferedReader(new InputStreamReader(System.in));
-        String ip = "";
+    private static void startMainListener(DataManager dm, int unicastPort){
+
+        Enumeration<NetworkInterface> nets = null;
         try {
-            ip = reader.readLine();
+            nets = NetworkInterface.getNetworkInterfaces();
+            NetworkInterface nic = null;
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+
+            byte[] mac;
+            ArrayList<NetworkInterface> interfaces = new ArrayList<NetworkInterface>();
+
+            for (NetworkInterface netInterface : Collections.list(nets)) {
+                displayInterfaceInformation(netInterface);
+                if(!netInterface.isLoopback()) {
+                    interfaces.add(netInterface);
+                }
+            }
+
+            if(interfaces.size() > 1) {
+                for (NetworkInterface netInterface : interfaces) {
+
+                    out.println("CHOOSE A NIC TO LISTEN");
+                    mac = netInterface.getHardwareAddress();
+                    StringBuilder sb = new StringBuilder();
+
+                    for (int i = 0; i < mac.length; i++) {
+                        sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? "-" : ""));
+                    }
+
+                    out.println("Index " + netInterface.getIndex() + ")  " + sb.toString());
+                    Enumeration<InetAddress> inetAddresses = netInterface.getInetAddresses();
+                    for (InetAddress inetAddress : Collections.list(inetAddresses)) {
+                        out.println("   LocalLink: " + inetAddress.isLinkLocalAddress() + " => " + inetAddress);
+                    }
+                    out.println("");
+                }
+
+                int nicIndex = -1;
+
+                nicIndex = Integer.parseInt(reader.readLine());
+                nic = NetworkInterface.getByIndex(nicIndex);
+            }
+            else
+                if(interfaces.size() == 1)
+                    nic = interfaces.get(0);
+
+            if(nic != null){
+
+
+                out.println("   1) Local Link");
+                out.println("   2) External Link");
+
+                boolean isLocalLink = (Integer.parseInt(reader.readLine())) == 1;
+
+                ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, nic.getIndex(), isLocalLink, unicastPort, 50);
+                Thread t = new Thread(mainListener);
+                t.start();
+
+
+            }
+            else{
+                out.println("ERROR RETRIEVING NETWORK INTERFACES");
+            }
+
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, ip, 15000, mtu, 1000);
-        Thread t = new Thread(mainListener);
-
-        t.start();
     }
 
-    private static void startSender(String MacAddress, int destPort, int mtu, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
+    private static void startSender(int nodeIdentifier, int destPort, int unicastPort, int mtu, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
 
         out.println("GIVE ME A IP TO SEND");
 
@@ -163,8 +178,7 @@ public class Main{
             e.printStackTrace();
         }
 
-
-        TransferMultiSender tms = new TransferMultiSender(MacAddress, destIP, destPort, 15001, mtu, cm, cmmi, docName, true);
+        TransferMultiSender tms = new TransferMultiSender(nodeIdentifier,  destIP, destPort, unicastPort, mtu, cm, cmmi, docName, true);
         Thread t = new Thread(tms);
         t.start();
         
@@ -184,14 +198,10 @@ public class Main{
 
     }
 
-    private static String createFTNFFolderStructure(String MacAddress) {
-        String rootPath = System.getProperty("user.home") + "/Desktop/" + MacAddress + "/";
-        out.println(rootPath);
-        File root = new File(rootPath);
-        while(!root.exists() && !root.isDirectory() && !root.mkdir());
-        String ftnfpath = rootPath + "/FTNF/";
-
-        root = new File(ftnfpath);
+    private static String createFTNFFolderStructure() {
+        String ftnfpath = System.getProperty("user.home") + "/Desktop/FTNF/";
+        out.println(ftnfpath);
+        File root = new File(ftnfpath);
         while(!root.exists() && !root.isDirectory() && !root.mkdir());
 
         out.println("CREATED FTNF");
@@ -228,6 +238,10 @@ public class Main{
             out.printf("isLocal?: %s\n", inetAddress.isLinkLocalAddress());
         }
 
+        for (InterfaceAddress address : netint.getInterfaceAddresses()) {
+            System.out.println("FULL ADDRESS => " + address + "/" + address.getNetworkPrefixLength());
+        }
+
         out.printf("Up? %s\n", netint.isUp());
         out.printf("Loopback? %s\n", netint.isLoopback());
         out.printf("PointToPoint? %s\n", netint.isPointToPoint());
@@ -236,6 +250,6 @@ public class Main{
         out.printf("Hardware address: %s\n",
                 Arrays.toString(netint.getHardwareAddress()));
         out.printf("MTU: %s\n", netint.getMTU());
-        out.printf("\n");
+        out.print("\n");
     }
 }

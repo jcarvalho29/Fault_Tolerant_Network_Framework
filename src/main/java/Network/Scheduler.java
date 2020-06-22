@@ -1,6 +1,8 @@
 package Network;
 
 import java.io.*;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Set;
@@ -20,6 +22,7 @@ public class Scheduler {
         if(smi == null) {
             createNetworkFolder(Root);
             this.smi = new SchedulerMetaInfo(Root);
+
             writeSchedulerMetaInfoFile();
         }
         else {

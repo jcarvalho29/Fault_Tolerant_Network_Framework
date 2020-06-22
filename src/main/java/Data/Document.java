@@ -78,14 +78,14 @@ public class Document {
     }
 
     /*
-     * Given an ArrayList of chunks, this function uses the Data.ChunkManager object to write them to Root/MacAddress/hash/chunks folder
+     * Given an ArrayList of chunks, this function uses the Data.ChunkManager object to write them to Root/nodeIdentifier/hash/chunks folder
      * */
     public boolean addChunks(ChunkMessage[] chunks){
         return this.cm.addChunks(chunks);
     }
 
     /*
-     * Uses the Data.ChunkManager object to delete all the saved chunks in Root/MacAddress/hash/chunks as well as the MetaInfo File and the hash Folder
+     * Uses the Data.ChunkManager object to delete all the saved chunks in Root/nodeIdentifier/hash/chunks as well as the MetaInfo File and the hash Folder
      * */
     public void delete(){
         this.cm.eraseChunks();
@@ -99,56 +99,57 @@ public class Document {
      *   String folder => Destination Folder within the Node Folder
      */
     public void writeDocumentToFolder(String folder){
-        System.out.println("ROOT => " + this.Root);
-        System.out.println("FOLDER => " + folder);
-        System.out.println("DOCNAME => " + this.documentName);
+        if(this.cm.isWrittenToMemory) {
+            System.out.println("ROOT => " + this.Root);
+            System.out.println("FOLDER => " + folder);
+            System.out.println("DOCNAME => " + this.documentName);
 
-        System.out.println("");
-        this.cm.mi.print();
-        System.out.println("");
+            System.out.println("");
+            this.cm.mi.print();
+            System.out.println("");
 
-        String folderToWritePath = folderPathNormalizer(folder) + this.documentName ;
-        String folderToReadPath = folderPathNormalizer(this.Root + "/" + this.cm.mi.Hash) + "/Chunks/";
+            String folderToWritePath = folderPathNormalizer(folder) + this.documentName;
+            String folderToReadPath = folderPathNormalizer(this.Root + "/" + this.cm.mi.Hash) + "/Chunks/";
 
-        int i = 0;
-        int j = 0;
-        int readBytes = this.cm.mi.datagramMaxSize;
-        int totalReadBytes = 0;
-        int numberOfChunks = this.cm.mi.numberOfChunks;
-        try {
-            Path p;
-            FileOutputStream outputStream = new FileOutputStream(folderToWritePath, false);
+            int i = 0;
+            int j;
+            int readBytes = this.cm.mi.datagramMaxSize;
+            int totalReadBytes;
+            int numberOfChunks = this.cm.mi.numberOfChunks;
+            try {
+                Path p;
+                FileOutputStream outputStream = new FileOutputStream(folderToWritePath, false);
 
-            long start = System.currentTimeMillis();
+                long start = System.currentTimeMillis();
 
-            int chunksInBuffer = Math.min(10000, numberOfChunks);
-            byte[] buffer = new byte[this.cm.mi.datagramMaxSize * chunksInBuffer];
-            while (i < numberOfChunks) {
-                j = 0;
-                totalReadBytes = 0;
-                while (j < chunksInBuffer && i < numberOfChunks) {
-                    if(i == numberOfChunks-1)
-                        readBytes = (int)(this.cm.mi.chunksSize - ((numberOfChunks -1) * this.cm.mi.datagramMaxSize));
+                int chunksInBuffer = Math.min(10000, numberOfChunks);
+                byte[] buffer = new byte[this.cm.mi.datagramMaxSize * chunksInBuffer];
+                while (i < numberOfChunks) {
+                    j = 0;
+                    totalReadBytes = 0;
+                    while (j < chunksInBuffer && i < numberOfChunks) {
+                        if (i == numberOfChunks - 1)
+                            readBytes = (int) (this.cm.mi.chunksSize - ((numberOfChunks - 1) * this.cm.mi.datagramMaxSize));
 
-                    p = Paths.get(folderToReadPath + (i + Integer.MIN_VALUE) + ".chunk");
-                    //System.out.println("BUFFER LENGTH " + buffer.length);
-                    //System.out.println("TOTALREADBYTES " + totalReadBytes);
-                    //System.out.println("READBYTES " + readBytes);
-                    System.arraycopy(Files.readAllBytes(p), 0, buffer, totalReadBytes, readBytes);
-                    totalReadBytes += readBytes;
-                    i++;
-                    j++;
+                        p = Paths.get(folderToReadPath + (i + Integer.MIN_VALUE) + ".chunk");
+
+                        System.arraycopy(Files.readAllBytes(p), 0, buffer, totalReadBytes, readBytes);
+                        totalReadBytes += readBytes;
+                        i++;
+                        j++;
+                    }
+                    outputStream.write(Arrays.copyOf(buffer, totalReadBytes));
                 }
-                outputStream.write(Arrays.copyOf(buffer, totalReadBytes));
+                buffer = null;
+                outputStream.close();
+                long end = System.currentTimeMillis();
+                System.out.println("TOOK " + (end - start));
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            buffer = null;
-            outputStream.close();
-            long end = System.currentTimeMillis();
-            System.out.println("TOOK " + (end-start));
         }
-        catch (Exception e){
-            e.printStackTrace();
-        }
+        else
+            System.out.println("Document isn't written to memory yet");
     }
 
     public byte[] getDocumentAsByteArray(){

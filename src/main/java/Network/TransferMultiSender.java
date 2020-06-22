@@ -2,10 +2,7 @@ package Network;
 
 import Data.ChunkManager;
 import Data.ChunkManagerMetaInfo;
-import Messages.MissingChunkIDs;
-import Messages.Over;
-import Messages.TransferMetaInfo;
-import Messages.TransferMultiReceiverInfo;
+import Messages.*;
 
 import java.io.*;
 import java.net.DatagramPacket;
@@ -25,7 +22,7 @@ public class TransferMultiSender implements Runnable{
     private boolean receivedOver = false;
     public boolean wasInterrupted = false;
 
-    private String MacAddress;
+    private int nodeIdentifier;
     private int ID;
 
     private InetAddress destIP;
@@ -55,10 +52,10 @@ public class TransferMultiSender implements Runnable{
 
     private TransmitterStats stats;
 
-    public TransferMultiSender(String MacAdress, InetAddress destIP, int destUnicastPort, int unicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName, boolean confirmation){
+    public TransferMultiSender(int nodeIdentifier, InetAddress destIP, int destUnicastPort, int unicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName, boolean confirmation){
         Random rand = new Random();
 
-        this.MacAddress = MacAdress;
+        this.nodeIdentifier = nodeIdentifier;
         this.ID = rand.nextInt();
 
         this.destIP = destIP;
@@ -107,9 +104,9 @@ public class TransferMultiSender implements Runnable{
                 cmmi.full = false;
 
                 if (this.DocumentName == null)
-                    tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.confirmation);
+                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.ID, cmmi, this.confirmation);
                 else
-                    tmi = new TransferMetaInfo(this.MacAddress, this.ID, cmmi, this.DocumentName, this.confirmation);
+                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.ID, cmmi, this.DocumentName, this.confirmation);
 
                 byte[] info = getBytesFromObject((Object) tmi);
                 System.out.println("TRANSFERMETAIFO SIZE " + info.length);
@@ -184,6 +181,7 @@ public class TransferMultiSender implements Runnable{
     private void processDatagramPacket(DatagramPacket dp, long receiveTime) {
 
         Object obj = getObjectFromBytes(dp.getData());
+        InetAddress dpAddress;
 
         if(obj instanceof TransferMultiReceiverInfo){
             this.TMRI_Lock.lock();
@@ -203,9 +201,29 @@ public class TransferMultiSender implements Runnable{
                 this.timeout_Lock.unlock();
                 MissingChunkIDs mcid = (MissingChunkIDs) obj;
 
-                processMissingChunkIDs(mcid);
+                if(this.ID == mcid.transferID) {
+                    dpAddress = dp.getAddress();
+                    if(!dpAddress.equals(this.destIP)){
+                        changeFastUnicastSendersDestIP(dpAddress);
+                        this.destIP = dpAddress;
+                    }
+
+                    processMissingChunkIDs(mcid);
                 }
+            }
             else {
+                if(obj instanceof IPChange){
+                    IPChange ipc = (IPChange) obj;
+
+                    if(this.ID == ipc.transferID && !this.destIP.equals(dp.getAddress())) {
+                        this.destIP = dp.getAddress();
+                        changeFastUnicastSendersDestIP(this.destIP);
+                        if(!ipc.newIP.equals(this.destIP))
+                            System.out.println("    THE RECEIVER IS UNDER A NAT NETWORK\n" + this.destIP + " vs " + ipc.newIP);
+                        else
+                            System.out.println("    THE RECEIVER IP IS\n" + ipc.newIP);
+                    }
+                }
                 if(obj instanceof Over){
                     Over over = (Over) obj;
 
@@ -302,10 +320,45 @@ public class TransferMultiSender implements Runnable{
             }
         }
         else {
-            int chunksPerSender = Math.floorDiv(mc.length, numberOfReceivers);
-            int split, initialMCSize = mc.length;
-            boolean isRunning;
             FastUnicastSender fus;
+            //inicializar estrutura
+            boolean[] chunksStillNotSent = new boolean[this.cm.mi.numberOfChunks];
+            boolean[] fusChunksStillNotSent;
+            chunksStillNotSent[0] = false;
+            for (int i = 1; i < chunksStillNotSent.length; i += i) {
+                System.arraycopy(chunksStillNotSent, 0, chunksStillNotSent, i, Math.min((chunksStillNotSent.length - i), i));
+            }
+
+            for(int i = 0; i < numberOfReceivers; i++){
+                fus = this.fastSenders.get(i);
+                fusChunksStillNotSent = fus.getChunksIDToSend();
+
+                for(int j = 0; j < this.cm.mi.numberOfChunks; j++){
+                    chunksStillNotSent[j] = fusChunksStillNotSent[j] || chunksStillNotSent[j];
+                }
+            }
+
+            int[] processedMC = new int[mc.length];
+            int processedMCPointer = 0;
+            int id;
+
+            for(int i = 0; i < mc.length; i++){
+                id = mc[i] - Integer.MIN_VALUE;
+                if(!chunksStillNotSent[id]){
+                    processedMC[processedMCPointer] = mc[i];
+                    processedMCPointer++;
+                }
+                else
+                    System.out.println("REMOVED A REPETITIVE EMISSION ( " + id + " )");
+            }
+
+            int[] aux = new int[processedMCPointer];
+            System.arraycopy(processedMC, 0, aux, 0, processedMCPointer);
+            processedMC = aux;
+
+            int chunksPerSender = Math.floorDiv(processedMCPointer, numberOfReceivers);
+            int split, initialMCSize = processedMCPointer;
+            boolean isRunning;
             Thread t;
 
             //System.out.println("    CHUNKS PER SENDER " + chunksPerSender);
@@ -316,8 +369,8 @@ public class TransferMultiSender implements Runnable{
                     split = chunksPerSender * (i + 1);
                 fus = this.fastSenders.get(i);
                 fus.changeDPS(mcids.DatagramsPerSecondPerSender);
-                isRunning = fus.addChunksToSend(copyArraySection(mc, split - chunksPerSender*i));
-                mc = chopArray(mc, split - chunksPerSender*i);
+                isRunning = fus.addChunksToSend(copyArraySection(processedMC, split - chunksPerSender*i));
+                processedMC = chopArray(processedMC, split - chunksPerSender*i);
                 if (!isRunning) {
                     t = new Thread(fus);
                     t.start();
@@ -327,7 +380,7 @@ public class TransferMultiSender implements Runnable{
     }
 
     private void processOver(Over over){
-        if(over.ID == this.ID)
+        if(over.transferID == this.ID)
             this.receivedOver = true;
 
         if(over.isInterrupt) {
@@ -345,6 +398,16 @@ public class TransferMultiSender implements Runnable{
         this.timeoutSES.shutdownNow();
         this.transferMetaInfoSES.shutdownNow();
         this.unicastSocket.close();
+    }
+
+    public void changeFastUnicastSendersDestIP(InetAddress newDestIP){
+        FastUnicastSender fus;
+        int numberOfFUS = this.fastSenders.size();
+
+        for(int i = 0; i < numberOfFUS; i++){
+            fus = this.fastSenders.get(i);
+            fus.changeDestIP(newDestIP);
+        }
     }
 
     public void run (){

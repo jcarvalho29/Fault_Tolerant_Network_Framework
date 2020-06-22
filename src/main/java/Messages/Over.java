@@ -4,11 +4,11 @@ import java.io.Serializable;
 
 public class Over implements Serializable {
 
-    public int ID;
+    public int transferID;
     public boolean isInterrupt;
 
-    public Over(int ID, boolean isInterrupt){
-        this.ID = ID;
+    public Over(int transferID, boolean isInterrupt){
+        this.transferID = transferID;
         this.isInterrupt = isInterrupt;
     }
 }
