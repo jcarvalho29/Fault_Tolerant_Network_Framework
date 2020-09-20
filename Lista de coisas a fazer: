@@ -1,0 +1,114 @@
+Lista de coisas a fazer:
+	Corrigir o uso do Over para permitir Interrupções => DONE?
+		Atualizar estado da Transferencia => DONE ???
+	
+	Alterar o comportamento do receptor quando a transferência se refere a informação que já possui:
+		inteiramente => over => DONE
+		parcialmente => apenas pedir os Chunks que ainda não possui => DONE
+	
+	Criar uma class de Stats para que o Receptor possa dar um Feedback => DONE
+	
+	Alterar o comportamento do Transmissor ao receber MissingChunkIDs para atualizar a Velocidade de envio dos Datagramas tendo em conta o Feedback do Receptor => DONE
+	
+	Verificar se a class DatagramPacket / DatagramSocket do Java utiliza o campo do checksum do UDP para deteção de erros => Pelo que vi não
+	
+	Verificação de Integridade dos dados no fim da transferência => DONE
+
+	Multi Thread => tratar da concurrencia de dados no processo de enviar missingChunkIds (o processo de registo de chegada de Chunks não é rapido o suficiente)
+		*****Talvez não é boa ideia fazer multithread porque sao criadas muitas threads e o processo de controlo de concurrencia atrasa o processo de registo******
+
+	Investigar a maior perda de pacotes!!!!!!!!!! => NADA A FAZER
+
+	permitir o envio de mais de 1000 Datagramas/s atualizando as medições de tempo de milisegundos para nanosegundos => DONE
+
+	corrigir o timeout do lado do transmissor quando o TransferMetaInfo é dado como não recebido => DONE?
+	
+	Alterar o carregamento de chunks nos fastsenders de forma a ter uma thread dedicada a carregar dados da memoria => É NECESSÁRIA UMA REESTRUTURAÇÃO (PROVAVELMENTE NÃO É POSSÍVEL)
+
+	alterar o codigo que monta um documento a partir de chunks => ALTERADO MAS NÃO ENCONTRO GRANDES DIFERENÇAS
+
+	estimar RTT no transmissor para usar na deteção de timeout => DONE, MAS NÃO SEI SE VOU USAR
+
+	ENVIAR OVER DE INTERRUPÇÃO QUANDO DA TIMEOUT DO LADO DO RECEPTOR!!!!!!!!!! => DONE
+	
+	Fazer verificação dos documentos quando programa reinicia => Demasiado custoso??
+
+	remover sleeps desnecessários => Não dá para reduzir por causa dos possíveis atrasos e perdas
+
+	Documento recebido e nao montado até o fim da execução do programa, nao consegue ser montado apos reinicio do mesmo => DONE
+
+	Registar a velocidade de envio pedida (DPS) nas estatísticas => DONE
+
+	Alterar estrutura do sender de forma a serem enviados varios datagramas por sleep (redução do numero de sleeps, aumento do tempo de sleep, aumento de precisão, possível aumento de velocidade de envio) => DONE
+
+	Trocar conta de sleep time em milisegundos para float e fazer conversão para nanosegundos (Testar) => PASSEI A USAR OUTRA FORMA PARA REDUZIR SLEEPS
+
+	SENDER TEM QUE PASSAR A USAR ARRAYS! => DONE
+
+	OPTIMIZAR PROCESSO DE REGISTO DE CHUNKS => DONE SEM RECORRER A MULTITHREAD
+
+	Reduzir sleeps nas threads do receiver => NÃO ME PARECE SER POSSÍVEL DEVIDO A ESTRUTURA USADA (THREAD QUE RECOLHE CM É A MESMA QUE DETETA TIMEOUTS E NECESSITA DOS SLEEPS)
+
+	Reestruturar o compressedMissingChunkIDs => DONE, MAS FALTA USAR SO ARRAYS => DONE
+
+	CHANGEBYTEARRAYZIZE ESTA NEGATIVO FUL => ESTÁ COM UM IF, ESTAR ATENTO (RTT * DPS ULPTRAPASA O INTEGER.MAX_VALUE => LIMITAR ESTE VALOR)
+
+	Implementar um sistema que interrompa a transmissão de dados quando este perde a conexão a um AP
+
+
+
+
+
+	
+
+	automatização do calculo do DPS => MAIS OU MENOS FEITO, É PRECISO MELHORAR (TER EM CONTA PERDAS, DPS ANTERIORES, JITTER)
+
+	Problema com a medição do RTT no transmissor
+
+	intervalo no envio de vários missingChunkIds tem que ser automatizado 
+
+	PRECISO DE ARRANJAR MANEIRA DE LER A CAPACITY DOS NICs => existe um file que parece dar essa informação mas apenas para ligaçoes ethernet
+
+	Controlo de NIC a ser usado
+	
+	ADICIONAR INFORMAÇÃO SOBRE A CAPACITY DO NIC DO TRANSMISSOR NO HANDSHAKE (TMI) PARA SER TOMADA EM CONTA NO CALCULO DO DPS NO RECEPTOR
+
+	Criar Recuperção de erros?
+		=> alterar o campo Hash do TMI para possuir x Hashs de partes diferentes da Informação, facilitando a deteção do erro?
+
+	Calculo aproximado do jitter
+
+	Controlo de concorrência no datamanager
+
+	INTRODUZIR MOBILIDADE
+
+	optimizar sender!!!! => DONE?????
+
+	melhorar recalculo dos Missing chunk IDs por causa de serem demasiado grandes/pequenos
+
+	RESOLVER EXCEPTIONS MARCADAS NO CÓDIGO
+
+	É necessário remover os repetidos quando se recebe um missingchunksids
+
+	Substituir MACADDRESS por algum codigo que o substitua (e que identifique o nodo)
+
+	Criar apenas 1 thread para escrever chunks em memoria quando sao recebidos => DONE?? FALTA TESTAR
+
+	ERRO AO PEDIR CHUNKS EM FALTA, É TENTADO PRODUZIR NOVOS COMPRESSED MISSING CHUNKS QUANDO SAO TODOS RECEBIDOS!?!?!?!?
+
+	STATS NÃO SAO BEM CALCULADAS QUANDO HA TROCAS DE IP NO RECEPTOR!!!!!!!!!
+
+	PROBLEMAS COM AS REDES NAT
+		ADICIONAR IPS AO IPCHANGE
+
+	POSSO TENTAR MUDAR O SISTEAM DE IDENTIFICAÇÃO DE CHUNKS NO SENDER
+
+	REPEATED CHUNKS!?!?!?!?!?
+
+	AUMENTAR TEMPO MINIMO DE CHECK NO RECEIVER!?!?!?
+
+	TER ATENÇÃO AO BIND DE IPS!!! (QUANDO HA UM MOMENTO DE DESCONEXÂO E SE VOLTA A TER O MESMO IP)
+
+	CONSTRUTOR DE TRANSFERECEIVER QUE PERMITA ESTABELECER PORTAS PARA SEREM USADAS
+
+	REVER SISTEMA DE PREVENÇÃO DE ENVIO DE REPETIDOS
