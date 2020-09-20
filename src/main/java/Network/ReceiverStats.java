@@ -5,8 +5,9 @@ import java.util.Date;
 
 public class ReceiverStats {
 
-    private int MTU;
-    private int NICCapacity;
+    private  NIC nic;
+    private int senderLinkSpeed;
+    private boolean isSenderConnectionWireless;
     private int numberOfListeners;
     private long numberOfMissingChunks;
 
@@ -54,13 +55,16 @@ public class ReceiverStats {
 
     public ArrayList<Integer> dpsPerCycle;
 
-    public ReceiverStats(int MTU, int NICCapacity, int numberOfListeners, int numberOfMissingChunks){
-        this.MTU = MTU;
-        this.NICCapacity = NICCapacity;
+    public ReceiverStats(NIC nic, int senderLinkSpeed, boolean isSenderConnectionWireless, int numberOfListeners, int numberOfMissingChunks){
+
+        this.nic = nic;
+        this.senderLinkSpeed = senderLinkSpeed;
+        this.isSenderConnectionWireless = isSenderConnectionWireless;
+
         this.numberOfListeners = numberOfListeners;
         this.numberOfMissingChunks = numberOfMissingChunks;
 
-        this.averageDPSize = MTU - 100;
+        this.averageDPSize = this.nic.getMTU() - 100;
 
         this.protocolStartTime = 0;
         this.protocolEndTime = 0;
@@ -257,15 +261,39 @@ public class ReceiverStats {
     }
 
     public void calculateDPS(){
-        int capacityInDPS = ((this.NICCapacity*1000000)/(this.averageDPSize*8));
+        int nicSpeed;
 
-        int maxDPSPerListener;// = Math.min(capacityInDPS/this.numberOfListeners, 5000);
+        if(this.nic.isWireless)
+            nicSpeed = this.nic.getSpeed()/1000;
+        else
+            nicSpeed = this.nic.getSpeed();
+
+        int limiterLinkSpeed = Math.min(nicSpeed, this.senderLinkSpeed);
+        System.out.println("NIC SPEED " + nicSpeed);
+        System.out.println("SENDER SPEED " + this.senderLinkSpeed);
+
+        if(this.isSenderConnectionWireless || this.nic.isWireless) {
+            limiterLinkSpeed *= .75;
+            System.out.println("LIMITED SPEED DUE TO WIRELESS CONNECTION");
+        }
+        else
+        {
+            System.out.println("BOTH CONNECTIONS ARE WIRED ONES");
+        }
+        if(limiterLinkSpeed == 0)
+            limiterLinkSpeed = 1;
+
+        int capacityInDPS = ((limiterLinkSpeed*1000000)/(this.averageDPSize*8));
+        int maxDPSPerListener = Math.min(capacityInDPS/this.numberOfListeners, 5000);
+
         maxDPSPerListener = Math.max(capacityInDPS/this.numberOfListeners, 1);
 
         if(this.numberOfMissingChunks/capacityInDPS > 20) {
-            System.out.println("                    Multipliquei por 0.85");
+            System.out.println("                    Multipliquei por 0.80");
             maxDPSPerListener *= .80;
         }
+        System.out.println("DPS/LISTENER " + maxDPSPerListener);
+
         //else
             //maxDPSPerListener *= .90;
 

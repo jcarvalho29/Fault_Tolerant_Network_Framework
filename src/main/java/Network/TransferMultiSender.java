@@ -5,10 +5,7 @@ import Data.ChunkManagerMetaInfo;
 import Messages.*;
 
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.Executors;
@@ -21,9 +18,18 @@ public class TransferMultiSender implements Runnable{
     public boolean run = true;
     private boolean receivedOver = false;
     public boolean wasInterrupted = false;
+    private boolean hasConnection;
+    private boolean firstStart = false;
 
     private int nodeIdentifier;
     private int ID;
+
+    private NIC nic;
+
+    private DatagramSocket unicastSocket;
+    private boolean isLinkLocal;
+    private InetAddress ownIP;
+    private int ownUnicastPort;
 
     private InetAddress destIP;
     private int destUnicastPort;
@@ -40,8 +46,6 @@ public class TransferMultiSender implements Runnable{
     private ScheduledExecutorService transferMetaInfoSES;
     private ScheduledExecutorService timeoutSES;
 
-    private DatagramSocket unicastSocket;
-    private int unicastPort;
 
     private ArrayList<FastUnicastSender> fastSenders;
     private int[] transmittedMissingChunkIDs;
@@ -52,12 +56,15 @@ public class TransferMultiSender implements Runnable{
 
     private TransmitterStats stats;
 
-    public TransferMultiSender(int nodeIdentifier, InetAddress destIP, int destUnicastPort, int unicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName, boolean confirmation){
+    public TransferMultiSender(int nodeIdentifier, InetAddress destIP, int destUnicastPort, NIC nic, boolean isLinkLocal, int ownUnicastPort, int MTU, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName, boolean confirmation){
         Random rand = new Random();
+
+        this.hasConnection = true;
 
         this.nodeIdentifier = nodeIdentifier;
         this.ID = rand.nextInt();
 
+        this.nic = nic;
         this.destIP = destIP;
         this.destUnicastPort = destUnicastPort;
         this.MTU = MTU;
@@ -81,14 +88,14 @@ public class TransferMultiSender implements Runnable{
         this.receivedMissingChunkIDs = false;
 
         this.stats = new TransmitterStats();
-        try {
-            this.unicastPort = unicastPort;
-            this.unicastSocket = new DatagramSocket(this.unicastPort);
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
+
+        this.ownUnicastPort = ownUnicastPort;
+        this.isLinkLocal = isLinkLocal;
+
+        changeOwnIP(nic.addresses);
 
     }
+
     private final Runnable sendTransferMetaInfo = () -> {
         this.TMRI_Lock.lock();
         if(!this.receivedTransferMultiReceiverInfo) {
@@ -104,9 +111,9 @@ public class TransferMultiSender implements Runnable{
                 cmmi.full = false;
 
                 if (this.DocumentName == null)
-                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.ID, cmmi, this.confirmation);
+                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.ID, this.nic.getSpeed()/1000, this.nic.isWireless, this. cmmi, this.confirmation);
                 else
-                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.ID, cmmi, this.DocumentName, this.confirmation);
+                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.ID, this.nic.getSpeed()/1000, this.nic.isWireless, cmmi, this.DocumentName, this.confirmation);
 
                 byte[] info = getBytesFromObject((Object) tmi);
                 System.out.println("TRANSFERMETAIFO SIZE " + info.length);
@@ -115,7 +122,7 @@ public class TransferMultiSender implements Runnable{
 
                 int tries = 0;
                 boolean sent = false;
-                while (!sent && tries < 3) {
+                while (this.hasConnection && !sent && tries < 3) {
                     try {
                         tries++;
                         this.unicastSocket.send(dp);//!!!!!!!!!!!!!!!!!!!!!!!EXCEPTION!!
@@ -125,8 +132,14 @@ public class TransferMultiSender implements Runnable{
                     }
                     this.TMRI_Lock.unlock();
                 }
-                System.out.println("SENT TRANSFERMETAINFO TO " + this.destIP + " " + this.destUnicastPort);
-                this.stats.markTmiSendTime();
+
+                if(sent) {
+                    System.out.println("SENT TRANSFERMETAINFO TO " + this.destIP + " " + this.destUnicastPort);
+                    this.stats.markTmiSendTime();
+                }
+                else{
+                    System.out.println("NO CONNECTION WHILE TRYING TO SEND TRANSFERMETAINFO");
+                }
             }
         }
         else{
@@ -232,6 +245,7 @@ public class TransferMultiSender implements Runnable{
             }
         }
     }
+
     private void processTransferMultiReceiverInfo(TransferMultiReceiverInfo tmri){
 
         int[] mc;
@@ -278,7 +292,7 @@ public class TransferMultiSender implements Runnable{
             System.out.println("FROM " + chunksPerSender*i + " TO " + split + " ( " + (split - chunksPerSender*i) + " ) ARRAY SIZE OF " + chunkIDS.length);
             System.arraycopy(mc, chunksPerSender*i, chunkIDS, 0, split - chunksPerSender*i);
 
-            fus = new FastUnicastSender(this.ID, this.destIP, tmri.ports[i], this.cm, chunkIDS, tmri.datagramPacketsPerSecondPerReceiver);
+            fus = new FastUnicastSender(this.ID, this.destIP, tmri.ports[i], this.ownIP, this.cm, chunkIDS, tmri.datagramPacketsPerSecondPerReceiver);
             System.out.println("SENDING TO " + tmri.ports[i] + " | " + chunksPerSender*i + " -> " + (split-1) + " | ( 0 -> " + this.cmmi.numberOfChunks + " )");
             this.fastSenders.add(fus);
 
@@ -314,8 +328,8 @@ public class TransferMultiSender implements Runnable{
                 System.arraycopy(mc, 0, holder, currentSize, mc.length);
                 this.transmittedMissingChunkIDs = holder;
 
-                for(int a : this.transmittedMissingChunkIDs)
-                    System.out.print(a + " ");
+/*                for(int a : this.transmittedMissingChunkIDs)
+                    System.out.print(a + " ");*/
                 holder = null;
             }
         }
@@ -410,29 +424,109 @@ public class TransferMultiSender implements Runnable{
         }
     }
 
+    public void changeOwnIP(ArrayList<InetAddress> addresses){
+
+        if(!addresses.contains(this.ownIP)){
+            InetAddress newIP = null;
+
+            for (InetAddress address : addresses)
+                if (address.isLinkLocalAddress() == this.isLinkLocal) {
+                    newIP = address;
+                    break;
+                }
+
+            if(newIP != null) {
+                try {
+                    this.ownIP = newIP;
+
+                    if(this.unicastSocket != null) {
+                        this.unicastSocket.close();
+                        System.out.println("CLOSED UNICASTSOCKET!!");
+                    }
+
+                    this.unicastSocket = new DatagramSocket(null);
+                    InetSocketAddress isa = new InetSocketAddress(newIP, this.ownUnicastPort);
+                    this.unicastSocket.bind(isa);
+
+
+                    System.out.println("hasConnection? " + this.hasConnection);
+
+                    this.hasConnection = true;
+                    Thread t = new Thread(this);
+                    t.start();
+                    System.out.println("CHANGED IP AND CREATED NEW THREAD");
+
+                    System.out.println("Listening to NEW IP =>" + this.ownIP + " PORT =>" + this.ownUnicastPort + "\nhasConnection? " + this.hasConnection);
+
+
+                    for(FastUnicastSender fus : this.fastSenders)
+                        fus.changeOwnIP(newIP);
+
+                } catch (SocketException e) {
+                    e.printStackTrace();
+                    System.out.println(newIP);
+                }
+            }
+            else {
+                System.out.println("NEW IP SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
+                updateConnectionStatus(false);
+            }
+        }
+        else {
+            System.out.println("SAME IP AS BEFORE");
+            if (!this.hasConnection) {
+                System.out.println("    BUT HAD NO CONNECTION (hasConnection => TRUE)");
+                updateConnectionStatus(true);
+            }
+        }
+
+    }
+
+    public void updateConnectionStatus(boolean value){
+
+        boolean oldHasConnection = this.hasConnection;
+        this.hasConnection = value;
+
+        for(FastUnicastSender fus : this.fastSenders)
+            fus.changeHasConnection(value);
+
+        if(value && !oldHasConnection) {
+            System.out.println("Listening to NEW IP =>" + this.ownIP + " PORT =>" + this.ownUnicastPort + " NO NEW THREAD");
+/*            Thread t = new Thread(this);
+            t.start();*/
+        }
+    }
+
     public void run (){
-        try {
+        System.out.println("NEW");
+
+        if(!this.firstStart) {
             this.transferMetaInfoSES.scheduleWithFixedDelay(sendTransferMetaInfo, 0, 5, TimeUnit.SECONDS);
             this.timeoutSES.scheduleWithFixedDelay(updateTimeoutStatus, 0, 2, TimeUnit.SECONDS);
-            byte[] buf;
-            DatagramPacket dp;
+            this.firstStart = !this.firstStart;
+        }
 
-            while(this.run){
-                buf = new byte[this.MTU];
-                dp = new DatagramPacket(buf, buf.length);
+        byte[] buf = new byte[this.MTU];
+        DatagramPacket dp = new DatagramPacket(buf, buf.length);
+
+        while(this.hasConnection && this.run){
+            try {
                 this.unicastSocket.receive(dp);
 
                 System.out.println("RECEIVED SOMETHING FROM " + dp.getAddress());
                 processDatagramPacket(dp, System.currentTimeMillis());
-            }
 
+                buf = new byte[this.MTU];
+                dp = new DatagramPacket(buf, buf.length);
+            }
+            catch (SocketException se){
+                System.out.println("TransferMultiSender Socket Closed");
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        catch (SocketException se){
-            //System.out.println("\t=>NBRCONFIRMATIONHANDLER DATAGRAMSOCKET CLOSED");
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
+        System.out.println("DIED hasConnection? " + this.hasConnection + " run? " + this.run);
     }
 
     private int[] copyArraySection(int[] original, int length){

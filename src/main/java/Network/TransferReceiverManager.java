@@ -12,19 +12,19 @@ import java.net.SocketException;
 import java.util.ArrayList;
 
 public class TransferReceiverManager implements Runnable{
-    private final ListenerMainUnicast mainListener;
-    private final DataManager dm;
-    private final TransferMetaInfo tmi;
-    private final ReceiverStats stats;
+
+    private ListenerMainUnicast mainListener;
+    private DataManager dm;
+    private TransferMetaInfo tmi;
+    private ReceiverStats stats;
 
     private InetAddress destIP;
-    private final int destPort;
+    private int destPort;
 
     private DatagramSocket unicastSocket;
     private boolean hasConnection;
 
-    private int MTU;
-    private int NICCapacity;
+    private NIC nic;
 
     private long receivedDPDuringCycle;
     private ArrayList<FastUnicastListener> fastListeners;
@@ -42,18 +42,18 @@ public class TransferReceiverManager implements Runnable{
     private boolean hasUpdatedCycleStats;
     private boolean run = true;
 
-    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress destIP, int destPort, TransferMetaInfo tmi, int MTU, int NICCapacity, int numberOfListeners){
+    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress destIP, int destPort, NIC nic, TransferMetaInfo tmi, int numberOfListeners){
 
         this.mainListener = ml;
         this.dm = dm;
-        this.stats = new ReceiverStats(MTU, NICCapacity, numberOfListeners, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
+
+        this.nic = nic;
+        this.stats = new ReceiverStats(this.nic, tmi.firstLinkSpeed, tmi.isWireless, numberOfListeners, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
 
         this.destIP = destIP;
         this.destPort = destPort;
         this.tmi = tmi;
 
-        this.MTU = MTU;
-        this.NICCapacity = NICCapacity;
         this.numberOfListeners = numberOfListeners;
 
         this.receivedDPDuringCycle = 0;
@@ -83,47 +83,44 @@ public class TransferReceiverManager implements Runnable{
         this.mainListener.endTransfer(this.tmi.transferID);
     }
 
-    public void updateHasConnection(){
-        this.hasConnection = true;
+    public void updateHasConnection(boolean value){
+        this.hasConnection = value;
     }
 
     public void changeIP(InetAddress newIP){
-        if(newIP != null) {
-            //enviar multiplos ipchanges ao transmissor para que este saiba que mudei de IP
-            IPChange ipc = new IPChange(this.tmi.transferID, newIP);
-            byte[] serializedIPC = getBytesFromObject(ipc);
+        //enviar multiplos ipchanges ao transmissor para que este saiba que mudei de IP
+        IPChange ipc = new IPChange(this.tmi.transferID, newIP);
+        byte[] serializedIPC = getBytesFromObject(ipc);
 
-            DatagramPacket packet = new DatagramPacket(serializedIPC, serializedIPC.length, this.destIP, this.destPort);
+        DatagramPacket packet = new DatagramPacket(serializedIPC, serializedIPC.length, this.destIP, this.destPort);
 
-            for (int i = 0; i < 5; i++) {
-                try {
-                    if(!this.unicastSocket.isClosed())
-                        this.unicastSocket.send(packet);
-                    Thread.sleep(5);
-                } catch (IOException | InterruptedException e) {
-                    e.printStackTrace();
-                }
+        for (int i = 0; i < 5; i++) {
+            try {
+                if(!this.unicastSocket.isClosed())
+                    this.unicastSocket.send(packet);
+                Thread.sleep(5);
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
             }
-
-            FastUnicastListener ful;
-            int numberOfFUL = this.fastListeners.size();
-            for (int i = 0; i < numberOfFUL; i++) {
-                ful = this.fastListeners.get(i);
-                ful.changeIP(newIP);
-            }
-
-            this.hasConnection = true;
         }
-        else{
-            this.hasConnection = false;
+
+        FastUnicastListener ful;
+        int numberOfFUL = this.fastListeners.size();
+        for (int i = 0; i < numberOfFUL; i++) {
+            ful = this.fastListeners.get(i);
+            ful.changeIP(newIP);
         }
+
+        this.hasConnection = true;
     }
+
+
     private void createFastListeners(){
         FastUnicastListener fus;
 
         for(int i = 0; i < numberOfListeners; i++){
 
-            fus = new FastUnicastListener(this.MTU, this.stats.getDPS());
+            fus = new FastUnicastListener(this.nic.getMTU(), this.stats.getDPS());
             //System.out.println("CREATED FASUNICAST WITH DPS AT " + this.stats.getDPS());
             Thread t = new Thread(fus);
 
@@ -168,7 +165,7 @@ public class TransferReceiverManager implements Runnable{
         for(int i = 0; i < this.fastListenersPorts.size(); i++)
             listenerPorts[i] = this.fastListenersPorts.get(i);
 
-        ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.7));
+        ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.nic.getMTU() * 0.7));
 
         if(cmcIDs == null) {
             System.out.println("Sending CMCID NULL WITH DPS " + this.stats.getDPS());
@@ -188,7 +185,7 @@ public class TransferReceiverManager implements Runnable{
 
 
     private void sendMissingChunkIDs() {
-        ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.MTU * 0.85));
+        ArrayList<CompressedMissingChunksID> cmcIDs = this.dm.getCompressedMissingChunkIDs(this.tmi.cmmi.Hash, (int)(this.nic.getMTU() * 0.85));
         ArrayList <MissingChunkIDs> mcIDs = new ArrayList<MissingChunkIDs>();
         MissingChunkIDs mcID;
 
