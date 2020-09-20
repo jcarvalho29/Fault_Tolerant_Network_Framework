@@ -412,9 +412,13 @@ public class TransferReceiverManager implements Runnable{
         //System.out.println("CYCLE EXEC TIME " + cycleExecTime);
         if(rtt == -1)
             sleepTime += 500;
-        else
-            sleepTime += Math.max(rtt, 100);
+        else {
+            if(this.nic.isWireless)
+                sleepTime += Math.max(rtt, 200);
+            else
+                sleepTime += Math.max(rtt, 100);
 
+        }
 
         switch (this.consecutiveTimeouts) {
             case 0:{
@@ -425,15 +429,15 @@ public class TransferReceiverManager implements Runnable{
                 break;
             }
             case 2: {
-                sleepTime *= 3;
+                sleepTime *= 4;
                 break;
             }
             case 3: {
-                sleepTime *= 5;
+                sleepTime *= 8;
                 break;
             }
             default: {
-                sleepTime *= 5 + this.consecutiveTimeouts%10;
+                sleepTime *= (8 + this.consecutiveTimeouts%10);
                 break;
             }
         }
