@@ -284,9 +284,8 @@ public class ReceiverStats {
             limiterLinkSpeed = 1;
 
         int capacityInDPS = ((limiterLinkSpeed*1000000)/(this.averageDPSize*8));
-        int maxDPSPerListener = Math.min(capacityInDPS/this.numberOfListeners, 5000);
 
-        maxDPSPerListener = Math.max(capacityInDPS/this.numberOfListeners, 1);
+        int maxDPSPerListener = Math.max(Math.min(capacityInDPS/this.numberOfListeners, 5000), 1);
 
         if(this.numberOfMissingChunks/capacityInDPS > 20) {
             System.out.println("                    Multipliquei por 0.80");
@@ -297,7 +296,8 @@ public class ReceiverStats {
         //else
             //maxDPSPerListener *= .90;
 
-        //aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
+        //CHANGE aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
+        maxDPSPerListener = 100;
         this.dpsPerCycle.add(maxDPSPerListener);
 
     }

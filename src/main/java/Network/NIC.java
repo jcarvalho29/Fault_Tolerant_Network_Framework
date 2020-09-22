@@ -57,17 +57,18 @@ public class NIC {
 
         this.ipChangeCheckerSES = Executors.newSingleThreadScheduledExecutor();
 
-        this.ipChangeCheckerSES.schedule(this.checkIPChange,1, TimeUnit.SECONDS);
+        this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
     }
 
     public void startIPChangeChecker(){
         this.stopChecker = false;
-        this.ipChangeCheckerSES.schedule(this.checkIPChange,1, TimeUnit.SECONDS);
+        this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
 
     }
 
     public void stopIPChangeChecker(){
         this.stopChecker = true;
+        System.out.println("            STOPPED ACTIVE IPCHANGECHECKER ( " + this.name + " )");
     }
 
     public void registerNewLMUListener(ListenerMainUnicast lmu){
@@ -81,7 +82,7 @@ public class NIC {
     public void removeLMUListener(ListenerMainUnicast lmu){
         this.nicListeners_Rcv.remove(lmu);
 
-        if(this.nicListeners_Rcv.size() + this.nicListeners_Snd.size() == 0)
+        if(this.nicListeners_Rcv.isEmpty() && this.nicListeners_Snd.isEmpty())
             this.stopChecker = true;
     }
 
@@ -96,8 +97,10 @@ public class NIC {
     public void removeTMSListener(TransferMultiSender tms){
         this.nicListeners_Snd.remove(tms);
 
-        if(this.nicListeners_Rcv.size() + this.nicListeners_Snd.size() == 0)
+        if(this.nicListeners_Rcv.size() + this.nicListeners_Snd.size() == 0) {
             this.stopChecker = true;
+        }
+        System.out.println("\t\t\t\tREMOVED TRANSFERMULTISENDER FROM LISTENER LIST");
     }
 
     private final Runnable checkIPChange = () -> {
@@ -141,7 +144,7 @@ public class NIC {
 
                     for(int i = 0; i < numberOfSnd; i++){
                         tms = this.nicListeners_Snd.get(i);
-                        tms.changeOwnIP(this.addresses);
+                        tms.changeOwnIP(this.addresses, true);
                     }
                 }
 
@@ -155,32 +158,29 @@ public class NIC {
                 else
                     getWiredSpeed();
 
-                if(this.speed == 1)
-                    System.out.println("\t\t\tNIC SPEED SET TO 1");
-                if(!hasConnection){
-                    this.hasConnection = true;
-                    updateNICListenersConnectionStatus(true);
-                }
+                updateNICListenersConnectionStatus(true);
 
             }
             else{
-                System.out.println("        NO NIC CONNECTION ( " + this.name + " )");
-                this.mtu = 0;
-                this.speed = -1;
-                this.hasConnection = false;
+                if(this.hasConnection) {
+                    System.out.println("        NO NIC CONNECTION ( " + this.name + " )");
+                    this.mtu = 0;
+                    this.speed = -1;
+                    this.hasConnection = false;
 
-                //ATUALIZAR O ESTADO PARA NO CONNECTION
-                updateNICListenersConnectionStatus(false);
-            }
+                    //ATUALIZAR O ESTADO PARA NO CONNECTION
+                    updateNICListenersConnectionStatus(false);
+
+                }}
 
         } catch (SocketException e) {
             e.printStackTrace();
         }
 
         if(!this.stopChecker)
-            this.ipChangeCheckerSES.schedule(this.checkIPChange,1, TimeUnit.SECONDS);
+            this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
         else
-            System.out.println("            STOPPED IPCHANGECHECKER ( " + this.name + " )");
+            this.ipChangeCheckerSES.schedule(this.checkIPChange,3, TimeUnit.SECONDS);
     };
 
     private void updateNICListenersConnectionStatus(boolean value){

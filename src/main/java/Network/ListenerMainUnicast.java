@@ -1,6 +1,7 @@
 package Network;
 
 import Data.DataManager;
+import Messages.IPChange;
 import Messages.TransferMetaInfo;
 
 import java.io.*;
@@ -134,14 +135,16 @@ public class ListenerMainUnicast implements Runnable{
 
     private void processDatagramPacket(DatagramPacket dp){
 
-            Object obj = getObjectFromBytes(dp.getData());
-            TransferMetaInfo tmi;
+        Object obj = getObjectFromBytes(dp.getData());
 
+        if(obj instanceof TransferMetaInfo) {
+
+            TransferMetaInfo tmi;
             tmi = (TransferMetaInfo) obj;
 
             //MUDAR PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS
 
-            if(!this.receivedIDs.contains(tmi.transferID)) {
+            if (!this.receivedIDs.contains(tmi.transferID)) {
                 this.receivedIDs.add(tmi.transferID);
 
                 if (!this.dm.hasChunkManager(tmi.cmmi.Hash)) {
@@ -153,23 +156,34 @@ public class ListenerMainUnicast implements Runnable{
                 }
 
 
-                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), this.nic, tmi,4);
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), this.nic, tmi, 1);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
                 this.infoReceiverManager.put(tmi.transferID, trm);
-            }
-            else {
+            } else {
                 this.infoReceiverManager.get(tmi.transferID).sendTransferMultiReceiverInfo();
                 System.out.println("TMRI RESENT");
             }
+        }
+        else{
+            if(obj instanceof IPChange){
+                IPChange ipc = (IPChange) obj;
 
+                if(this.receivedIDs.contains(ipc.transferID)){
+                    TransferReceiverManager trm = this.infoReceiverManager.get(ipc.transferID);
+
+                    trm.changeDestIP(ipc.newIP);
+                    System.out.println("SENDER CHANGED IP");
+                }
+            }
+        }
     }
     public void run(){
-        System.out.println("NEW");
+        System.out.println("NEW (LISTENERMAINUNICAST)");
 
         byte[] buf = new byte[this.nic.getMTU()];
         DatagramPacket dp;
-        dp = new DatagramPacket(buf, this.nic.getMTU());
+        dp = new DatagramPacket(buf, this.nic.getMTU()); // EXCEPTION o MTU PODE SER 0 QUANDO nenhum NIC TEM UMA CONEXÃO ON STARTUP
 
         while(this.hasConnection && this.run){
             try {

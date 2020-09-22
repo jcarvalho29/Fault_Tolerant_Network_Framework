@@ -10,6 +10,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class TransferReceiverManager implements Runnable{
 
@@ -20,6 +21,7 @@ public class TransferReceiverManager implements Runnable{
 
     private InetAddress destIP;
     private int destPort;
+    private ReentrantLock destIPLock;
 
     private DatagramSocket unicastSocket;
     private boolean hasConnection;
@@ -52,6 +54,8 @@ public class TransferReceiverManager implements Runnable{
 
         this.destIP = destIP;
         this.destPort = destPort;
+        this.destIPLock = new ReentrantLock();
+
         this.tmi = tmi;
 
         this.numberOfListeners = numberOfListeners;
@@ -92,7 +96,9 @@ public class TransferReceiverManager implements Runnable{
         IPChange ipc = new IPChange(this.tmi.transferID, newIP);
         byte[] serializedIPC = getBytesFromObject(ipc);
 
+        this.destIPLock.lock();
         DatagramPacket packet = new DatagramPacket(serializedIPC, serializedIPC.length, this.destIP, this.destPort);
+        this.destIPLock.unlock();
 
         for (int i = 0; i < 5; i++) {
             try {
@@ -114,6 +120,11 @@ public class TransferReceiverManager implements Runnable{
         this.hasConnection = true;
     }
 
+    public void changeDestIP(InetAddress newDestIP){
+        this.destIPLock.lock();
+        this.destIP = newDestIP;
+        this.destIPLock.unlock();
+    }
 
     private void createFastListeners(){
         FastUnicastListener fus;
@@ -135,7 +146,11 @@ public class TransferReceiverManager implements Runnable{
         if(!this.TransferMultiReceiverInfoReceived){
             try {
                 byte[] data = getBytesFromObject(this.tmri);
-                DatagramPacket dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+
+                this.destIPLock.lock();
+                    DatagramPacket dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+                this.destIPLock.unlock();
+
                 this.unicastSocket.send(dp);
                 System.out.println("                    NEW TRMI SEND TIME");
                 this.stats.markTrmiSendTime();
@@ -143,7 +158,11 @@ public class TransferReceiverManager implements Runnable{
 
                 for(MissingChunkIDs mcid : this.missingChunksIDS){
                     data = getBytesFromObject(mcid);
-                    dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+
+                    this.destIPLock.lock();
+                        dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+                    this.destIPLock.unlock();
+
                     this.unicastSocket.send(dp);
                     Thread.sleep(2);
                 }
@@ -213,11 +232,19 @@ public class TransferReceiverManager implements Runnable{
             if(this.hasConnection)
                 try {
                     data = getBytesFromObject(mcid);
-                    dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+
+                    this.destIPLock.lock();
+                        dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
+                    this.destIPLock.unlock();
+
                     this.unicastSocket.send(dp);
                     Thread.sleep(5);
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
+                }
+            finally {
+                    this.destIPLock.lock();
+                    this.destIPLock.unlock();
                 }
         }
     }
@@ -316,33 +343,33 @@ public class TransferReceiverManager implements Runnable{
 
     private void sendOver(boolean wasInterrupted) {
 
-                Over over = new Over(tmi.transferID, wasInterrupted);
+        Over over = new Over(tmi.transferID, wasInterrupted);
 
-                byte[] data = getBytesFromObject(over);
+        byte[] data = getBytesFromObject(over);
 
-                DatagramPacket dp = new DatagramPacket(data, data.length, destIP, destPort);
+        this.destIPLock.lock();
+            DatagramPacket dp = new DatagramPacket(data, data.length, destIP, destPort);
+        this.destIPLock.unlock();
 
-                int tries = 0;
-                stats.markTransferEndTime();
+        int tries = 0;
+        stats.markTransferEndTime();
 
-                while(tries < 10) {
-                    if (this.hasConnection) {
-                        try {
-                            unicastSocket.send(dp);
-                            tries++;
-                            Thread.sleep(300);
-                        } catch (IOException | InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        System.out.println("OVER SENT");
-                    }
+        while(tries < 10) {
+            if (this.hasConnection) {
+                try {
+                    unicastSocket.send(dp);
+                    tries++;
+                    Thread.sleep(300);
+                } catch (IOException | InterruptedException e) {
+                    e.printStackTrace();
                 }
-                stats.markProtocolEndTime();
-                stats.printStats();
+                System.out.println("OVER SENT");
+            }
+        }
+        stats.markProtocolEndTime();
+        stats.printStats();
 
     }
-
-
 
     public void startReceiverManager() {
 
@@ -396,6 +423,7 @@ public class TransferReceiverManager implements Runnable{
     }
 
     private int getSleepTime(int cycleExecTime){
+        //CHANGE talvez mudificar este tempo tendo em consideração a % de perdas do CICLO
         int cycle = this.stats.getNumberOfTransferCycles();
         int rtt;
         int sleepTime = -cycleExecTime;
