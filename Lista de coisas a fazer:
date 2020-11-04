@@ -118,3 +118,11 @@ Lista de coisas a fazer:
 		=> Quando o sender perde conexão durante o envio, uma vez returnada não são carregados chunks 
 
 		NIC nao tes a detetar perda de conexão, levando a que threads sejam terminadas (elas proprias detetam perda de conexão) mas que nao voltem a ser criadas.
+
+		TROCA DE IP DO SENDER NAO ESTA A FUNCIONAR, O PRINT DIZ NO CONENEXÃO
+
+		CORRIGIR AS MEDIÇÕES DE RTT (NO TRANSMISSOR E RECEPTOR)
+
+		 PASSAR O CONTROLO DO TRANSFERMULTISENDER PARA O SCHEDULER
+
+		 MUDAR A ESTRUTURA DE DADOS DO SCHEDULER PARA PERMITIR A MUDANÇA DE IP

@@ -1,345 +1,452 @@
 package Network;
 
+import Data.ChunkManager;
+import Data.ChunkManagerMetaInfo;
+import Data.DataManager;
+import Data.Document;
+import Messages.*;
+
 import java.io.*;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Set;
+import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class Scheduler {
+    private final int nodeIdentifier;
+    private DataManager dm;
+
     private SchedulerMetaInfo smi;
 
-    public Scheduler(String Root, boolean fetch){
+    private ArrayList<NIC> nics;
+
+    private HashMap<String, ArrayList<SchedulerIPListener>> ipListeners_byNIC;
+
+    private HashMap<Integer, TransferMultiSender> tms_byTransferID;
+    private HashMap<String, ArrayList<Integer>> transferID_byNIC;
+
+    private HashMap<Integer, DatagramPacket> transferMetaInfos;
+    private HashMap<Integer, DatagramPacket> transferMetaInfos_LINKLOCAL;
+
+    private ScheduledExecutorService tmiScheduler;
+
+    private Random rand;
+
+    public Scheduler(String Root, boolean fetch, DataManager dm) {
         SchedulerMetaInfo smi = null;
         Root = folderPathNormalizer(Root + "Network/");
-
 
         if (fetch) {
             smi = fetchSMI(Root);
         }
 
-        if(smi == null) {
+        if (smi == null) {
             createNetworkFolder(Root);
             this.smi = new SchedulerMetaInfo(Root);
 
             writeSchedulerMetaInfoFile();
-        }
-        else {
+        } else {
             this.smi = smi;
         }
+
+        this.dm = dm;
+
+        this.nics = new ArrayList<NIC>();
+        this.ipListeners_byNIC = new HashMap<String, ArrayList<SchedulerIPListener>>();
+
+        this.smi.scheduledTransmissions.putAll(this.smi.onGoingTransmissions);
+        this.smi.onGoingTransmissions.clear();
+        updateSchedulerMetaInfoFile();
+
+        this.tms_byTransferID = new HashMap<Integer, TransferMultiSender>();
+        this.transferID_byNIC = new HashMap<String, ArrayList<Integer>>();
+
+        this.transferMetaInfos = new HashMap<Integer, DatagramPacket>();
+        this.transferMetaInfos_LINKLOCAL = new HashMap<Integer, DatagramPacket>();
+
+        this.tmiScheduler = Executors.newSingleThreadScheduledExecutor();
+        this.tmiScheduler.scheduleWithFixedDelay(sendTMIs, 0, 3, TimeUnit.SECONDS);
+        this.rand = new Random();
+        this.nodeIdentifier = this.rand.nextInt();
+
+        ChunkManagerMetaInfo cmmi;
+        String docName = null;
+
+        for (Transmission t : this.smi.scheduledTransmissions.values()) {
+           createTMIDP(t);
+        }
+    }
+
+    private void refreshAllNICs() {
+        for (NIC nic : this.nics)
+            refreshNICDS(nic);
+    }
+
+    private void refreshNICDS(NIC nic) {
+        updateNICListeners(nic, nic.getAddresses());
+    }
+
+    public void registerNIC(NIC nic) {
+
+        //CHANGE LOCKS
+
+        this.nics.add(nic);
+        this.transferID_byNIC.put(nic.name, new ArrayList<Integer>());
+        refreshNICDS(nic);
+    }
+
+/*    public void changeNICAddresses(NIC nic, ArrayList<InetAddress> ips) {
+
+        stopNICListeners(nic.name);
+
+        for(InetAddress ip : ips){
+            SchedulerIPListener schl = new SchedulerIPListener(this,nic,ip,5000); //CHANGE PORT
+        }
+
+        //CHANGE LOCKS
+
+        ArrayList<Integer> transferIDs = this.tms_byNIC.get(nic.name);
+
+        int numberOfTMS = transferIDs.size();
+        int transferid;
+        boolean isLINKLOCAL;
+        for (int i = 0; i < numberOfTMS; i++) {
+            transferid = transferIDs.get(i);
+            isLINKLOCAL = this.smi.onGoingTransmissions.get(transferid).destIP.isLinkLocalAddress();
+            this.tms_byTransferID.get(transferid).changeOwnIP(ips, isLINKLOCAL);
+        }
+    }*/
+
+    public void changeNICConnectionStatus(String nicName, boolean hasConnection) {
+
+        for(SchedulerIPListener schl : this.ipListeners_byNIC.get(nicName))
+            schl.updateHasConnectionStatus(hasConnection);
+
+        for(int transferID : this.transferID_byNIC.get(nicName))
+            this.tms_byTransferID.get(transferID).updateConnectionStatus(hasConnection);
     }
 
     private void createNetworkFolder(String Root) {
         String path = folderPathNormalizer(Root);
         File root = new File(path);
-        while(!root.exists() && !root.isDirectory() && !root.mkdir());
+        while (!root.exists() && !root.isDirectory() && !root.mkdir()) ;
     }
+
+    private void createTMIDP(Transmission t){
+        ChunkManagerMetaInfo cmmi;
+        String docName;
+
+        if (this.dm.messages.containsKey(t.infoHash)) {
+            cmmi = this.dm.messages.get(t.infoHash).mi;
+            docName = null;
+        } else {
+            Document d = this.dm.documents.get(t.infoHash);
+            cmmi = d.cm.mi;
+            docName = d.documentName;
+        }
+
+        TransferMetaInfo tmi = new TransferMetaInfo(this.nodeIdentifier, this.rand.nextInt(), cmmi, docName, t.confirmation);
+
+        byte[] serializedData = getBytesFromObject(tmi);
+        DatagramPacket dp = new DatagramPacket(serializedData, serializedData.length, t.destIP, t.destPort);
+
+        if (t.destIP.isLinkLocalAddress())
+            this.transferMetaInfos_LINKLOCAL.put(tmi.transferID, dp);
+        else
+            this.transferMetaInfos.put(tmi.transferID, dp);
+    }
+
+    private void removeTMIDP(Transmission t){
+        if(t.destIP.isLinkLocalAddress())
+            this.transferMetaInfos_LINKLOCAL.remove(t.transferID);
+        else
+            this.transferMetaInfos.remove(t.transferID);
+    }
+
+    private final Runnable sendTMIs = () -> {
+        System.out.println("TRYING TO SEND TMIS");
+        for(ArrayList<SchedulerIPListener> schls : this.ipListeners_byNIC.values()) {
+            //System.out.println("AAA");
+            for (SchedulerIPListener schl : schls) {
+                //System.out.println("BBB");
+
+                if (schl.isLinkLocal) {
+                    //System.out.println("CCC111");
+                    for (int transferID : this.transferMetaInfos_LINKLOCAL.keySet()) {
+                        //System.out.println("DDD");
+                        schl.sendDP(this.transferMetaInfos_LINKLOCAL.get(transferID));
+                    }
+                }
+                else {
+                    //System.out.println("CCC222");
+                    for (int transferID : this.transferMetaInfos.keySet()) {
+                        //System.out.println("DDD");
+                        schl.sendDP(this.transferMetaInfos.get(transferID));
+                    }
+                }
+            }
+        }
+    };
 
     /*
-    * Schedules the transmission of the information based ont its destination IP and priority
-    * */
-    public void schedule(String ip, int priority, int port, String infoHash){
-        HashMap<Integer, ArrayList<Transmission>> priority_Hashs;
-        ArrayList<Transmission> transmissions;
-        Transmission t = new Transmission(infoHash, port);
+     * Schedules the transmission of the information based on its destination IP and priority
+     * */
+    public void schedule(String infoHash, InetAddress destIP, int destPort, boolean confirmation) {
 
-        if(this.smi.infoByIP_Priority.containsKey(ip)){
-            if (this.smi.infoByIP_Priority.get(ip).containsKey(priority)){
-                transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
+        Transmission t = new Transmission(this.rand.nextInt(), infoHash, destIP, destPort, confirmation);
+
+        this.smi.scheduledTransmissions.put(t.transferID, t);
+
+        createTMIDP(t);
+
+        updateSchedulerMetaInfoFile();
+    }
+
+    private void moveToOngoing(Transmission transmission) {
+        Transmission t = this.smi.scheduledTransmissions.get(transmission.transferID);
+
+        if (transmission.transferID == t.transferID && transmission.destIP.equals(t.destIP) && transmission.destPort == t.destPort) {
+            this.smi.scheduledTransmissions.remove(transmission.transferID);
+            this.smi.onGoingTransmissions.put(transmission.transferID, t);
+            removeTMIDP(t);
+        }
+
+        updateSchedulerMetaInfoFile();
+    }
+
+    public void markAsInterrupted(int transferID) {
+        Transmission t = this.smi.onGoingTransmissions.get(transferID);
+
+        this.smi.onGoingTransmissions.remove(transferID);
+        this.smi.scheduledTransmissions.put(transferID, t);
+        createTMIDP(t);
+
+        //CHANGE LOCKS
+
+        ArrayList<Integer> ids;
+
+        for (String nm : this.transferID_byNIC.keySet()) {
+            ids = this.transferID_byNIC.get(nm);
+
+            if (ids.contains(transferID)) {
+                ids.remove(transferID);
+                this.transferID_byNIC.remove(nm);
+                this.transferID_byNIC.put(nm, ids);
+                break;
             }
-            else{
-                transmissions = new ArrayList<Transmission>();
+        }
 
-                this.smi.infoByIP_Priority.get(ip).put(priority, transmissions);
+        updateSchedulerMetaInfoFile();
+    }
 
-                makePriorityFolder(ip, priority);
+    public void markAsFinished(int transferID) {
+        Transmission t = this.smi.onGoingTransmissions.get(transferID);
+
+        this.smi.onGoingTransmissions.remove(transferID);
+        this.smi.finishedTransmissions.put(transferID, t);
+
+        updateSchedulerMetaInfoFile();
+    }
+
+    public void cancelTransmission(Transmission transmission) {
+        Transmission t = this.smi.scheduledTransmissions.get(transmission.transferID);
+
+        if (transmission.transferID == t.transferID && transmission.destIP.equals(t.destIP) && transmission.destPort == t.destPort) {
+            this.smi.scheduledTransmissions.remove(transmission.transferID);
+            removeTMIDP(t);
+        }
+
+        updateSchedulerMetaInfoFile();
+    }
+
+    public boolean isScheduled(int transferID) {
+        return (this.smi.scheduledTransmissions.containsKey(transferID) && (this.transferMetaInfos.containsKey(transferID) || this.transferMetaInfos_LINKLOCAL.containsKey(transferID)));
+    }
+
+    public void updateNICListeners(NIC nic, ArrayList<InetAddress> ips){
+
+        ArrayList<SchedulerIPListener> schl = new ArrayList<SchedulerIPListener>();
+
+        SchedulerIPListener listener;
+        Thread t;
+
+        if(this.ipListeners_byNIC.containsKey(nic.name))
+            stopNICListeners(nic.name);
+
+        for(InetAddress ip : ips){
+            listener = new SchedulerIPListener(this, nic, ip, 5000); //CHANGE PORT
+            schl.add(listener);
+            t = new Thread(listener);
+            t.start();
+        }
+
+        this.ipListeners_byNIC.put(nic.name, schl);
+
+        //UPDATE TRANSFERMULTISENDERs IP
+
+        Transmission transm;
+        for(int transferID : this.transferID_byNIC.get(nic.name)){
+            transm = this.smi.onGoingTransmissions.get(transferID);
+            this.tms_byTransferID.get(transferID).changeOwnIP(ips, transm.destIP.isLinkLocalAddress());
+        }
+    }
+
+    public void stopNICListeners(String nicName){
+        for(SchedulerIPListener schl : this.ipListeners_byNIC.get(nicName))
+            schl.kill();
+
+        this.ipListeners_byNIC.remove(nicName);
+        this.ipListeners_byNIC.put(nicName, null);
+    }
+
+    /*private void startTMISENDERS(NIC nic){
+
+        new Thread(() ->{
+                //CHANGE LOCKS
+                ArrayList<DatagramSocket> ds = this.nicSockets.get(nic.name);
+                ArrayList<DatagramSocket> ds_LINKLOCAL = this.nicSockets_LINKLOCAL.get(nic.name);
+
+                Transmission t;
+                DatagramPacket dp;
+
+                while((!this.transferMetaInfos.isEmpty() || !this.transferMetaInfos_LINKLOCAL.isEmpty()) && (!ds.isEmpty() || !ds_LINKLOCAL.isEmpty())) {
+
+                    //SEND EXTERNAL IP
+                    for (DatagramSocket d : ds) {
+                        for (TransferMetaInfo tmi : this.transferMetaInfos.values()) {
+                            tmi.firstLinkSpeed = nic.getSpeed();
+                            tmi.isWireless = nic.isWireless;
+                            //CHANGE LOCKS
+                            t = this.smi.scheduledTransmissions.get(tmi.transferID);
+                            byte[] data = getBytesFromObject(tmi);
+                            dp = new DatagramPacket(data, data.length, t.destIP, t.destPort);
+
+                            if (!d.isClosed()) {
+                                try {
+                                    d.send(dp);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                    }
+                    //SEND INTERNAL IP
+                    for (DatagramSocket d : ds_LINKLOCAL) {
+                        for (TransferMetaInfo tmi : this.transferMetaInfos_LINKLOCAL.values()) {
+                            tmi.firstLinkSpeed = nic.getSpeed();
+                            tmi.isWireless = nic.isWireless;
+                            //CHANGE LOCKS
+                            t = this.smi.scheduledTransmissions.get(tmi.transferID);
+                            byte[] data = getBytesFromObject(tmi);
+                            dp = new DatagramPacket(data, data.length, t.destIP, t.destPort);
+
+                            if (!d.isClosed()) {
+                                try {
+                                    d.send(dp);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                    }
+                }
+            ds = this.nicSockets.get(nic.name);
+            ds_LINKLOCAL = this.nicSockets_LINKLOCAL.get(nic.name);
+        });
+    }*/
+
+    public void processReceivedDP(DatagramPacket dp, NIC nic, InetAddress ip, int port){
+
+        Object obj = getObjectFromBytes(dp.getData());
+
+        InetAddress destIP = dp.getAddress();
+        int destPort = dp.getPort();
+
+        if(obj instanceof TransferMultiReceiverInfo){
+            long receivingTime = System.currentTimeMillis();
+            TransferMultiReceiverInfo tmri = (TransferMultiReceiverInfo) obj;
+            ChunkManager cm;
+
+            Transmission t = this.smi.scheduledTransmissions.get(tmri.transferID);
+            moveToOngoing(t);
+
+            if(this.dm.documents.containsKey(t.infoHash)){
+                Document d = this.dm.documents.get(t.infoHash);
+                cm = d.cm;
             }
+            else {
+                cm = this.dm.messages.get(t.infoHash);
+            }
+
+            TransferMultiSender tms = new TransferMultiSender(this, this.nodeIdentifier, tmri.transferID, nic.name, ip, port, destIP , destPort, cm, true);
+            /*nic.registerNewTMSListener(tms);
+             */
+            //CHANGE LOCKS
+            ArrayList<Integer> tmsID = this.transferID_byNIC.get(nic.name);
+
+            tmsID.add(tmri.transferID);
+            this.transferID_byNIC.remove(nic.name);
+            this.transferID_byNIC.put(nic.name, tmsID);
+
+            this.tms_byTransferID.put(tmri.transferID, tms);
+
+            tms.processTransferMultiReceiverInfo(tmri, receivingTime);
+
         }
         else{
-            priority_Hashs = new HashMap<Integer, ArrayList<Transmission>>();
-            transmissions = new ArrayList<Transmission>();
+            if(obj instanceof MissingChunkIDs){
+                MissingChunkIDs mcid = (MissingChunkIDs) obj;
 
-            priority_Hashs.put(priority, transmissions);
-            this.smi.infoByIP_Priority.put(ip, priority_Hashs);
-            makeIPFolder(ip);
-            makePriorityFolder(ip, priority);
-        }
+                TransferMultiSender tms = this.tms_byTransferID.get(mcid.transferID);
 
-        boolean b = false;
-        int tam = this.smi.infoByIP_Priority.get(ip).get(priority).size();
-        ArrayList<Transmission> t_pointer = this.smi.infoByIP_Priority.get(ip).get(priority);
-        Transmission a;
-
-        for(int i = 0; !b && i < tam; i++){
-            a = t_pointer.get(i);
-            if(t.infoHash.equals(a.infoHash)) {
-                b = true;
-            }
-        }
-
-        if(!b) {
-            transmissions.add(t);
-            this.smi.Hashs.add(infoHash);
-
-            this.smi.infoByIP_Priority.get(ip).put(priority, transmissions);
-
-            writeTransmissionToFolder(ip, priority, t);
-            updateSchedulerMetaInfoFile();
-        }
-    }
-
-    public void editPriority(String ip, int oldPriority, int newPriority, String infoHash){
-        ArrayList<Transmission> transmissions;
-
-        if(this.smi.infoByIP_Priority.containsKey(ip))
-            if(this.smi.infoByIP_Priority.get(ip).containsKey(oldPriority)){
-                transmissions = this.smi.infoByIP_Priority.get(ip).get(oldPriority);
-                boolean b = false;
-                int tam = transmissions.size();
-
-                for(int i = 0; !b && i < tam; i++) {
-                    if (transmissions.get(i).infoHash.equals(infoHash))
-                        b = true;
-                }
-
-                if(b){
-                    Transmission t = readTransmission(ip, oldPriority, infoHash);
-                    schedule(ip, newPriority, t.port, t.infoHash);
-                    deleteTransmissionFromFolder(ip, oldPriority, infoHash);
-                    removeTransmissionFromSMI(ip, oldPriority, t);
-                    updateSchedulerMetaInfoFile();
-                }
-            }
-    }
-
-    public void editIP(String oldIP, String newIP, int priority, String infoHash){
-        ArrayList<Transmission> transmissions;
-
-        if(this.smi.infoByIP_Priority.containsKey(oldIP))
-            if(this.smi.infoByIP_Priority.get(oldIP).containsKey(priority)) {
-                transmissions = this.smi.infoByIP_Priority.get(oldIP).get(priority);
-                int tam = transmissions.size();
-                boolean b = false;
-
-                for(int i = 0; !b && i < tam; i++){
-                    if(transmissions.get(i).infoHash.equals(infoHash))
-                        b = true;
-                }
-
-                if(b){
-                    Transmission t = readTransmission(oldIP, priority, infoHash);
-                    schedule(newIP, priority, t.port, t.infoHash);
-                    deleteTransmissionFromFolder(oldIP, priority, infoHash);
-                    removeTransmissionFromSMI(oldIP, priority, t);
-                    updateSchedulerMetaInfoFile();
-                }
-            }
-    }
-
-    public void editPort(String ip, int priority, String infoHash, int newPort){
-        ArrayList<Transmission> transmissions = null;
-        boolean flag = false;
-        Transmission t;
-
-        if(this.smi.infoByIP_Priority.containsKey(ip)) {
-            if (this.smi.infoByIP_Priority.get(ip).containsKey(priority)) {
-                transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
-
-                for(int i = 0; !flag && i < transmissions.size(); i++){
-                    t = transmissions.get(i);
-                    if(t.infoHash.equals(infoHash))
-                        flag = true;
-
-                    t.port = newPort;
-
-                    deleteTransmissionFromFolder(ip, priority, infoHash);
-                    writeTransmissionToFolder(ip, priority, t);
-                }
-            }
-        }
-    }
-
-    public void editInterrupted(String ip, int priority, String infoHash, boolean wasInterrupted){
-        ArrayList<Transmission> transmissions = null;
-        boolean flag = false;
-        Transmission t;
-
-        if(this.smi.infoByIP_Priority.containsKey(ip)) {
-            if (this.smi.infoByIP_Priority.get(ip).containsKey(priority)) {
-                transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
-
-                for(int i = 0; !flag && i < transmissions.size(); i++){
-                    t = transmissions.get(i);
-                    if(t.infoHash.equals(infoHash))
-                        flag = true;
-
-                    t.wasInterrupted = wasInterrupted;
-
-                    deleteTransmissionFromFolder(ip, priority, infoHash);
-                    writeTransmissionToFolder(ip, priority, t);
-                }
-            }
-        }
-    }
-
-    public ArrayList<Transmission> getTransmissionsByIP_Priority(String ip, int priority){
-        ArrayList<Transmission> transmissions = null;
-
-        if(this.smi.infoByIP_Priority.containsKey(ip)){
-            if(this.smi.infoByIP_Priority.get(ip).containsKey(priority)){
-                transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
-            }
-        }
-
-        return transmissions;
-    }
-
-    public ArrayList<Transmission> getTransmissionsToIP(String ip){
-        ArrayList<Transmission> allTransmissions = new ArrayList<Transmission>();
-        int prioritiesTam;
-
-        if(this.smi.infoByIP_Priority.containsKey(ip)){
-            prioritiesTam = this.smi.infoByIP_Priority.get(ip).keySet().size();
-            for(int i = prioritiesTam-1; i >= 0; i--){
-                allTransmissions.addAll(this.smi.infoByIP_Priority.get(ip).get(i));
-            }
-        }
-
-        return allTransmissions;
-    }
-
-    public ArrayList<Transmission> getTransmissionsToIP(String ip, int max){
-        ArrayList<Transmission> Transmissions = new ArrayList<Transmission>();
-        int TransmissionsSize = 0;
-        ArrayList<Transmission> transmissionsByPriority;
-
-        Set<Integer> existingPrioritiesSet;
-        Integer[] existingPriorities;
-        int prioritiesTam;
-        int numberOfTransmissions;
-        Transmission t;
-
-        if(this.smi.infoByIP_Priority.containsKey(ip)){
-            existingPrioritiesSet = this.smi.infoByIP_Priority.get(ip).keySet();
-            existingPriorities = existingPrioritiesSet.toArray(new Integer[0]);
-            prioritiesTam = existingPrioritiesSet.size();
-            for(int i = prioritiesTam-1; i >= 0; i--){
-                transmissionsByPriority = this.smi.infoByIP_Priority.get(ip).get(existingPriorities[i]);
-                numberOfTransmissions = transmissionsByPriority.size();
-                for(int j = 0; j < numberOfTransmissions && TransmissionsSize < max; j++) {
-                    Transmissions.add(transmissionsByPriority.get(j));
-                    TransmissionsSize++;
-                }
-            }
-        }
-
-        return Transmissions;
-    }
-
-    private void removeTransmissionFromSMI(String ip, int priority, Transmission transmission) {
-        ArrayList<Transmission> transmissions = this.smi.infoByIP_Priority.get(ip).get(priority);
-
-        removeTransmissionFromArrayList(transmissions, transmission);
-
-        if(transmissions.size() == 0){
-            HashMap<Integer, ArrayList<Transmission>> priorityHashTable = this.smi.infoByIP_Priority.get(ip);
-
-            priorityHashTable.remove(priority);
-            deletePriorityFolder(ip, priority);
-            if(priorityHashTable.keySet().size() == 0){
-                this.smi.infoByIP_Priority.remove(ip);
-                deleteIPFolder(ip);
-
+                tms.processMissingChunkIDs(mcid);
             }
             else{
-                HashMap<Integer, ArrayList<Transmission>> a = this.smi.infoByIP_Priority.get(ip);
-                a.remove(priority);
-                this.smi.infoByIP_Priority.put(ip, a);
+                if(obj instanceof IPChange){
+                    IPChange ipc = (IPChange) obj;
+
+                    TransferMultiSender tms = this.tms_byTransferID.get(ipc.transferID);
+
+                    tms.processIPChange(ipc, dp.getAddress());
+                }
+                else{
+                    if(obj instanceof Over){
+                        Over over = (Over) obj;
+
+                        TransferMultiSender tms = this.tms_byTransferID.get(over.transferID);
+
+                        tms.processOver(over);
+
+                        Transmission t = this.smi.onGoingTransmissions.get(over.transferID);
+                        markAsFinished(t.transferID);
+
+                        //CHANGE LOCKS
+                        ArrayList<Integer> tmsID = this.transferID_byNIC.get(nic.name);
+
+                        tmsID.remove(over.transferID);
+                        this.transferID_byNIC.remove(nic.name);
+                        this.transferID_byNIC.put(nic.name, tmsID);
+
+                        this.tms_byTransferID.remove(over.transferID);
+                    }
+                }
             }
         }
-        else
-            this.smi.infoByIP_Priority.get(ip).put(priority, transmissions);
-
-        this.smi.Hashs.remove(transmission.infoHash);
-
     }
 
-    public ArrayList<String> getDestinationServers(){
-        return new ArrayList<String>(this.smi.infoByIP_Priority.keySet());
-    }
-
-    public boolean isScheduled(String hash){
-        ///!!!!!!!!!!!!!!!!!!!!!!!!
-        return this.smi.Hashs.contains(hash);
-    }
-    private void removeTransmissionFromArrayList(ArrayList<Transmission> transmissions, Transmission t){
-        transmissions.removeIf(a -> a.infoHash.equals(t.infoHash) && a.port == t.port);
-    }
-
-    private void deleteIPFolder(String ip) {
-        String ipFolderPath = this.smi.Root + ip + "/";
-
-        File ipFolder = new File(ipFolderPath);
-
-        while(ipFolder.exists() && !ipFolder.delete());
-
-    }
-
-    private void deletePriorityFolder(String ip, int priority) {
-        String priorityFolderPath = this.smi.Root + ip + "/" + priority + "/";
-
-        File priorityFolder = new File(priorityFolderPath);
-
-        while(priorityFolder.exists() && !priorityFolder.delete());
-    }
-
-    private void deleteTransmissionFromFolder(String ip, int priority, String infoHash) {
-        String transmissionFilePath = this.smi.Root + ip + "/" + priority + "/" + infoHash;
-
-        File transmissionFile = new File(transmissionFilePath);
-
-        while(transmissionFile.exists() && !transmissionFile.delete());
-    }
-
-    private Transmission readTransmission(String ip, int priority, String infoHash) {
-        String transmissionFilePath = this.smi.Root + ip + "/" + priority + "/" + infoHash;
-
-        File FileInfo = new File(transmissionFilePath);
-        Object obj = null;
-
-        if(FileInfo.exists()) {
-            FileInputStream fileIn = null;
-
-            try {
-                fileIn = new FileInputStream(transmissionFilePath);
-                ObjectInputStream objectIn = new ObjectInputStream(fileIn);
-
-                obj = objectIn.readObject();
-
-            } catch (IOException | ClassNotFoundException e) {
-                e.printStackTrace();
+    public void sendDP(String nicName, int transferID, InetAddress myIP, int myPort, DatagramPacket dp){
+        if(this.transferID_byNIC.get(nicName).contains(transferID)){
+            for(SchedulerIPListener schl : this.ipListeners_byNIC.get(nicName)){
+                if(schl.ip.equals(myIP) && schl.port == myPort){
+                    schl.sendDP(dp);
+                    break;
+                }
             }
         }
-
-        return (Transmission) obj;
     }
-
-    private void makeIPFolder(String ip) {
-        String path = this.smi.Root + ip + "/";
-        File ipFolder = new File(path);
-
-        while(!ipFolder.exists() && !ipFolder.isDirectory() && !ipFolder.mkdir());
-
-    }
-
-    private void makePriorityFolder(String ip, int priority) {
-        String path = this.smi.Root + ip + "/" + priority + "/";
-        File priorityFolder = new File(path);
-
-        while(!priorityFolder.exists() && !priorityFolder.isDirectory() && !priorityFolder.mkdir());
-    }
-
     /*
      * Writes the SchedulerMetaInfo to a Folder
      * */
@@ -403,24 +510,6 @@ public class Scheduler {
         }
     }
 
-    private void writeTransmissionToFolder(String ip, int priority, Transmission t) {
-        String ipPriorityFolderPath = this.smi.Root + ip + "/" + priority + "/" + t.infoHash;
-
-        File transmissionInfo = new File(ipPriorityFolderPath);
-
-
-        FileOutputStream fileOut = null;
-        try {
-            fileOut = new FileOutputStream(transmissionInfo);
-            ObjectOutputStream objectOut = new ObjectOutputStream(fileOut);
-            objectOut.writeObject(t);
-            objectOut.close();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     /*
      * Fetches and retrieves a SchedulerMetaInfo object from the root/ if present
      * */
@@ -453,11 +542,86 @@ public class Scheduler {
         return path;
     }
 
-    private void printScheduler(){
-        for(String ip : this.smi.infoByIP_Priority.keySet()){
-            for(int priority : this.smi.infoByIP_Priority.get(ip).keySet())
-                for(Transmission t : this.smi.infoByIP_Priority.get(ip).get(priority))
-                    System.out.println("IP => " + ip + " PRIORITY => " + priority + "\nHASH => " + t.infoHash);
+    public boolean hasTMIToSend(){
+        boolean res;
+
+        //CHANGE LOCKS
+        res = !this.transferMetaInfos.isEmpty() || !this.transferMetaInfos_LINKLOCAL.isEmpty();
+
+        return res;
+    }
+
+    public void printSchedule(){
+        System.out.println("SCHEDULED TRANSMISSIONS:");
+        for(Transmission t : this.smi.scheduledTransmissions.values()){
+            System.out.println("\tTRANSFERID => " + t.transferID);
+            System.out.println("\tDestIP => " + t.destIP);
+            System.out.println("\tDestPort => " + t.destPort);
         }
+
+        System.out.println("ON GOING TRANSMISSIONS:");
+        for(Transmission t : this.smi.onGoingTransmissions.values()){
+            System.out.println("\tTRANSFERID => " + t.transferID);
+            System.out.println("\tDestIP => " + t.destIP);
+            System.out.println("\tDestPort => " + t.destPort);
+        }
+
+        System.out.println("FINISHED TRANSMISSIONS:");
+        for(Transmission t : this.smi.finishedTransmissions.values()){
+            System.out.println("\tTRANSFERID => " + t.transferID);
+            System.out.println("\tDestIP => " + t.destIP);
+            System.out.println("\tDestPort => " + t.destPort);
+        }
+    }
+
+    private Object getObjectFromBytes(byte[] data){
+        ByteArrayInputStream bis = new ByteArrayInputStream(data);
+        ObjectInput in = null;
+        Object o = null;
+
+        try {
+            in = new ObjectInputStream(bis);
+            o = in.readObject();
+        }
+        catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        finally {
+            try {
+                if (in != null) {
+                    in.close();
+                }
+            }
+            catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        return o;
+    }
+
+    private byte[] getBytesFromObject(Object obj) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream out = null;
+
+        try {
+            out = new ObjectOutputStream(bos);
+            out.writeObject(obj);
+            out.flush();
+
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            try {
+                bos.close();
+            }
+            catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        return bos.toByteArray();
     }
 }

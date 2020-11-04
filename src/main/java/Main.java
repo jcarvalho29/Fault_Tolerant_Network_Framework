@@ -21,18 +21,22 @@ public class Main{
 
     public static void main(String args[]){
         Random rand = new Random();
-        int nodeIdentifier = rand.nextInt();
 
         String ftnfpath = createFTNFFolderStructure();
 
         //out.println(path);
         DataManager dm = new DataManager(ftnfpath, true);
         out.println("CREATED DATAMANAGER");
-        Scheduler sc = new Scheduler(ftnfpath, true);
-        out.println("SCHEDULER");
+
+        Scheduler sc = new Scheduler(ftnfpath, true, dm);
+        out.println("CREATED SCHEDULER");
 
         ArrayList<NIC> nics = new ArrayList<NIC>();
-        getNICs(nics);
+        getNICs(nics, sc);
+
+        for(NIC nic : nics)
+            sc.registerNIC(nic);
+
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         String docHash = "";
@@ -48,6 +52,7 @@ public class Main{
                 out.println("5 - SEND DOCUMENT");
                 out.println("6 - SEND MESSAGE");
                 out.println("7 - MOUNT DOC");
+                out.println("8 - PRINT SCHEDULE");
 
                     String option = reader.readLine();
 
@@ -77,20 +82,26 @@ public class Main{
                     }
 
                     case 5: {
-                        ChunkManager cm = dm.documents.get(docHash).cm;
-                        startSender(nodeIdentifier, 3333, 4444, 1500, nics, cm, cm.getCMMI(), dm.documents.get(docHash).documentName);
+                        startSender(sc, docHash, 5000);
                         break;
                     }
 
                     case 6:{
-                        ChunkManager cm = dm.messages.get(msgHash);
-                        startSender(nodeIdentifier, 3333, 4444, 1500, nics, cm, cm.getCMMI(), null);
+                        startSender(sc, docHash, 5000);
                         break;
                     }
                     case 7:{
                         mountFile(dm);
                         break;
                     }
+
+                    case 8:{
+                        sc.printSchedule();
+                        break;
+                    }
+
+                    default:
+                        break;
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -98,7 +109,7 @@ public class Main{
         }
     }
 
-    private static void getNICs(ArrayList<NIC> nics){
+    private static void getNICs(ArrayList<NIC> nics, Scheduler sc){
         String nicPath = "/sys/class/net/";
         String wirelessPath = "/wireless";
         File nicFolder = new File(nicPath);
@@ -111,9 +122,9 @@ public class Main{
                 if(!nicName.equals("lo")) {
                     wirelessFolder = new File(nicPath + nicName + wirelessPath);
                     if(wirelessFolder.exists() && wirelessFolder.isDirectory())
-                        nics.add(new NIC(nicName, true));
+                        nics.add(new NIC(nicName, true, sc));
                     else
-                        nics.add(new NIC(nicName, false));
+                        nics.add(new NIC(nicName, false, sc));
                 }
         }
     }
@@ -225,7 +236,8 @@ public class Main{
         nic.registerNewLMUListener(mainListener);
     }
 
-    private static void startSender(int nodeIdentifier, int destPort, int unicastPort, int mtu, ArrayList<NIC> nics, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
+    private static void startSender(Scheduler sc, String infoHash, int destPort){
+//        private static void startSender(Scheduler sc, String infoHash, int destPort, int unicastPort, int mtu, ArrayList<NIC> nics, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
 
         out.println("GIVE ME A IP TO SEND");
 
@@ -239,7 +251,7 @@ public class Main{
             e.printStackTrace();
         }
 
-        NIC nic;
+        /*NIC nic;
 
         out.println("CHOOSE A NETWORK INTERFACE ADDRESS");
         for(int i = 0 ; i < nics.size(); i++){
@@ -273,9 +285,10 @@ public class Main{
         } catch (IOException e) {
             e.printStackTrace();
         }
+*/
+        sc.schedule(infoHash, destIP, destPort, true);
 
-        TransferMultiSender tms = new TransferMultiSender(nodeIdentifier,  destIP, destPort, nic, isLocalLink, unicastPort, mtu, cm, cmmi, docName, true);
-        nic.registerNewTMSListener(tms);
+        //CHANGE (PASSOU PARA O SCHEDULER)
     }
 
     private static String createMessage(DataManager dm, int maxPayloadSize) {

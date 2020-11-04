@@ -132,7 +132,7 @@ public class FastUnicastSender implements Runnable{
     }
 
     public void changeOwnIP(InetAddress newOwnIP){
-        System.out.println("NEW OWN IP | OLD => " + this.ownIP + "vs NEW => " + newOwnIP);
+        System.out.println("\t\t\tCHANGE OWNIP CALLED IN FASTSENDER");
         try {
 
             this.ownIP = newOwnIP;
@@ -161,6 +161,7 @@ public class FastUnicastSender implements Runnable{
             Thread t = new Thread(this);
             t.start();
         }
+        System.out.println("\t\t\tCHANGED FASTSENDER HASCONNECTION TO " + value);
     }
 
     public void run() {

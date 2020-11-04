@@ -11,6 +11,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 
 public class NIC {
+
     public boolean isWireless;
     public String name;
 
@@ -28,13 +29,15 @@ public class NIC {
     private int w_SignalLevel;
 
     public ArrayList<InetAddress> addresses;
+    private ReentrantLock addresses_Lock;
 
     private ScheduledExecutorService ipChangeCheckerSES;
 
     private ArrayList<ListenerMainUnicast> nicListeners_Rcv;
-    private ArrayList<TransferMultiSender> nicListeners_Snd;
+    private Scheduler scheduler;
+    //private ArrayList<TransferMultiSender> nicListeners_Snd;
 
-    public NIC(String nicName, boolean isWireless){
+    public NIC(String nicName, boolean isWireless, Scheduler scheduler){
         this.isWireless = isWireless;
         this.name = nicName;
 
@@ -50,10 +53,12 @@ public class NIC {
         this.w_SignalLevel = 0;
 
         this.addresses = new ArrayList<InetAddress>();
+        this.addresses_Lock = new ReentrantLock();
 
         this.statsLock = new ReentrantLock();
         this.nicListeners_Rcv = new ArrayList<ListenerMainUnicast>();
-        this.nicListeners_Snd = new ArrayList<TransferMultiSender>();
+        this.scheduler = scheduler;
+        //this.nicListeners_Snd = new ArrayList<TransferMultiSender>();
 
         this.ipChangeCheckerSES = Executors.newSingleThreadScheduledExecutor();
 
@@ -68,7 +73,6 @@ public class NIC {
 
     public void stopIPChangeChecker(){
         this.stopChecker = true;
-        System.out.println("            STOPPED ACTIVE IPCHANGECHECKER ( " + this.name + " )");
     }
 
     public void registerNewLMUListener(ListenerMainUnicast lmu){
@@ -82,25 +86,21 @@ public class NIC {
     public void removeLMUListener(ListenerMainUnicast lmu){
         this.nicListeners_Rcv.remove(lmu);
 
-        if(this.nicListeners_Rcv.isEmpty() && this.nicListeners_Snd.isEmpty())
+        //if(this.nicListeners_Rcv.isEmpty() && this.nicListeners_Snd.isEmpty())
+        if(this.nicListeners_Rcv.isEmpty() && this.scheduler.hasTMIToSend())
             this.stopChecker = true;
     }
 
-    public void registerNewTMSListener(TransferMultiSender tms){
-        if(!this.nicListeners_Snd.contains(tms))
-            this.nicListeners_Snd.add(tms);
-
+    public void markSchedulerAsActive(){
         if(this.stopChecker)
             startIPChangeChecker();
     }
 
-    public void removeTMSListener(TransferMultiSender tms){
-        this.nicListeners_Snd.remove(tms);
+    public void markSchedulerAsInactive(){
 
-        if(this.nicListeners_Rcv.size() + this.nicListeners_Snd.size() == 0) {
+        if(this.nicListeners_Rcv.size() > 0) {
             this.stopChecker = true;
         }
-        System.out.println("\t\t\t\tREMOVED TRANSFERMULTISENDER FROM LISTENER LIST");
     }
 
     private final Runnable checkIPChange = () -> {
@@ -110,14 +110,13 @@ public class NIC {
             NetworkInterface nic = NetworkInterface.getByName(this.name);
 
             if(nic != null) {
-                //System.out.println("NOT NULL " + nic);
                 boolean change = false;
                 InetAddress address;
 
-                //System.out.println("        UPDATED MTU AND HAS CONNECTION");
                 Enumeration<InetAddress> inetEnum = nic.getInetAddresses();
                 ArrayList<InetAddress> newAddresses = new ArrayList<InetAddress>();
 
+                this.addresses_Lock.lock();
                 while(inetEnum.hasMoreElements()) {
                     address = inetEnum.nextElement();
                     newAddresses.add(address);
@@ -125,8 +124,11 @@ public class NIC {
                         change = true;
                     }
                 }
+                this.addresses_Lock.unlock();
 
                 if(change) {
+                    this.addresses_Lock.lock();
+
                     System.out.println("OLD => " + this.addresses);
                     this.addresses = newAddresses;
                     System.out.println("NEW => " + this.addresses);
@@ -135,17 +137,19 @@ public class NIC {
                     ListenerMainUnicast lmu;
                     TransferMultiSender tms;
                     int numberOfRcv = this.nicListeners_Rcv.size();
-                    int numberOfSnd = this.nicListeners_Snd.size();
+                    //int numberOfSnd = this.nicListeners_Snd.size();
 
                     for(int i = 0; i < numberOfRcv; i++){
                         lmu = this.nicListeners_Rcv.get(i);
                         lmu.changeIP(this.addresses);
                     }
 
-                    for(int i = 0; i < numberOfSnd; i++){
+                    this.scheduler.updateNICListeners(this, this.addresses);
+                    /*for(int i = 0; i < numberOfSnd; i++){
                         tms = this.nicListeners_Snd.get(i);
                         tms.changeOwnIP(this.addresses, true);
-                    }
+                    }*/
+                    this.addresses_Lock.unlock();
                 }
 
                 //UPDATE VARIABLES
@@ -179,25 +183,24 @@ public class NIC {
 
         if(!this.stopChecker)
             this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
-        else
-            this.ipChangeCheckerSES.schedule(this.checkIPChange,3, TimeUnit.SECONDS);
     };
 
     private void updateNICListenersConnectionStatus(boolean value){
         ListenerMainUnicast lmu;
         TransferMultiSender tms;
         int numberOfRcv = this.nicListeners_Rcv.size();
-        int numberOfSnd = this.nicListeners_Snd.size();
+        //int numberOfSnd = this.nicListeners_Snd.size();
 
         for(int i = 0; i < numberOfRcv; i++){
             lmu = this.nicListeners_Rcv.get(i);
             lmu.updateConnectionStatus(value);
         }
 
-        for(int i = 0; i < numberOfSnd; i++){
+        this.scheduler.changeNICConnectionStatus(this.name, value);
+/*        for(int i = 0; i < numberOfSnd; i++){
             tms = this.nicListeners_Snd.get(i);
             tms.updateConnectionStatus(value);
-        }
+        }*/
     }
 
     private void getWirelessStatus() {
@@ -329,5 +332,13 @@ public class NIC {
         this.statsLock.unlock();
 
         return mtu;
+    }
+
+    public ArrayList<InetAddress> getAddresses(){
+        this.addresses_Lock.lock();
+        ArrayList<InetAddress> ips = new ArrayList<InetAddress>(this.addresses);
+        this.addresses_Lock.unlock();
+
+        return ips;
     }
 }
