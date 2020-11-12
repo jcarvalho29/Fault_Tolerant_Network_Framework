@@ -181,9 +181,24 @@ public class ListenerMainUnicast implements Runnable{
     public void run(){
         System.out.println("NEW (LISTENERMAINUNICAST)");
 
-        byte[] buf = new byte[this.nic.getMTU()];
+        int MTU;
+        int tries = 0;
+
+        while((MTU = this.nic.getMTU()) == -1 && tries < 4) {
+            try {
+                tries++;
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (tries == 4)
+            MTU = 1500;
+
+        byte[] buf = new byte[MTU];
         DatagramPacket dp;
-        dp = new DatagramPacket(buf, this.nic.getMTU()); // EXCEPTION o MTU PODE SER 0 QUANDO nenhum NIC TEM UMA CONEXÃO ON STARTUP
+        dp = new DatagramPacket(buf, MTU); // EXCEPTION o MTU PODE SER 0 QUANDO nenhum NIC TEM UMA CONEXÃO ON STARTUP (COM O SLEEP EM CIMA NAO)
 
         while(this.hasConnection && this.run){
             try {
@@ -192,11 +207,16 @@ public class ListenerMainUnicast implements Runnable{
                 processDatagramPacket(dp);
                 System.out.println("RECEIVED SOMETHING FROM " + dp.getAddress());
 
-                buf = new byte[this.nic.getMTU()];
-                dp = new DatagramPacket(buf, this.nic.getMTU());
+                buf = new byte[MTU];
+                dp = new DatagramPacket(buf, MTU);
             }
             catch (SocketException se){
-                System.out.println("\t=>LMU DATAGRAMSOCKET CLOSED");
+                if(!this.unicastSocket.isClosed()) {
+                    System.out.println("SAY WHAT!?!?!?!??!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!");
+                    this.unicastSocket.close();
+                }
+                System.out.println("\t=>LMU DATAGRAMSOCKET CLOSED? " + this.unicastSocket.isClosed());
+
                 //close = true;
             }
             catch (IOException e) {

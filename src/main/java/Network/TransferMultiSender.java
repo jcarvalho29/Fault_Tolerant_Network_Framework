@@ -177,6 +177,7 @@ public class TransferMultiSender{
 
             if(this.consecutiveTimeouts >= 30) {
                 kill();
+                this.sch.markAsInterrupted(this.nicName, this.transferID);
                 System.out.println("KILLED DUE TO TIMEOUT");
             }
             this.timeout_Lock.unlock();
@@ -392,11 +393,11 @@ public class TransferMultiSender{
 
         if(over.isInterrupt) {
             this.wasInterrupted = true;
-            this.sch.markAsInterrupted(transferID);
+            this.sch.markAsInterrupted(nicName, transferID);
             System.out.println("=>>> INTERRUPTED");
         }
         else {
-            this.sch.markAsFinished(transferID);
+            this.sch.markAsFinished(nicName, transferID);
             System.out.println("=>>> TRANSFER ENDED");
         }
         this.kill();

@@ -16,14 +16,16 @@ public class SchedulerIPListener implements Runnable{
 
     private DatagramSocket ds;
 
-    private boolean run;
     private boolean hasConnection;
+    private boolean run;
+    public boolean isRunning;
     private ReentrantLock connectionLock;
 
 
     public SchedulerIPListener(Scheduler sch, NIC nic, InetAddress ip, int port){
+        System.out.println("===============================================================>NEW IP LISTENER");
         this.run = true;
-        this.hasConnection = true;
+        this.isRunning = false;
         this.connectionLock = new ReentrantLock();
 
         this.sch = sch;
@@ -33,61 +35,56 @@ public class SchedulerIPListener implements Runnable{
         this.port = port;
         this.isLinkLocal = this.ip.isLinkLocalAddress();
 
+        bindDatagramSocket();
+    }
+
+    private void bindDatagramSocket() {
         try {
+
             this.ds = new DatagramSocket(null);
             InetSocketAddress isa = new InetSocketAddress(this.ip, this.port);
             this.ds.bind(isa);
             System.out.println("BOUND TO " + this.ip + " " + this.port);
+            this.hasConnection = true;
         }
         catch (SocketException e) {
-            System.out.println("ERROR BINDING TO " + this.ip + " " + this.port);
+            System.out.println("(SCHEDULERIPLISTENER) ERROR BINDING TO " + this.ip + " " + this.port);
             e.printStackTrace();
         }
     }
-
-/*    public void changeIPPort(InetAddress ip, int port){
-        if(this.ds != null)
-            this.ds.close();
-
-        this.ip = ip;
-        this.port = port;
-        this.isLinkLocal = this.ip.isLinkLocalAddress();
-
-        try {
-            this.ds = new DatagramSocket();
-            InetSocketAddress isa = new InetSocketAddress(this.ip, this.port);
-            this.ds.bind(isa);
-        }
-        catch (SocketException e) {
-            e.printStackTrace();
-        }
-    }*/
-
-    public void updateHasConnectionStatus(boolean value){
+/*
+    public void updateConnectionStatus(boolean value){
         this.connectionLock.lock();
         this.hasConnection = value;
         this.connectionLock.unlock();
-    }
 
-/*    public void restart(){
-        this.run = true;
-
-        Thread t = new Thread(this);
-        t.start();
-
+        if(value && !this.isRunning){
+            bindDatagramSocket();
+            new Thread(this).start();
+        }
+        else{
+            if(!value) {
+                this.ds.close();
+            }
+        }
     }*/
 
     public void kill(){
         this.connectionLock.lock();
         this.run = false;
+        this.isRunning = false;
         this.ds.close();
         this.connectionLock.unlock();
     }
 
     public void sendDP(DatagramPacket dp){
         try {
-            this.ds.send(dp);
-            System.out.println("SENT TMI");
+            if(this.ds != null && !this.ds.isClosed()) {
+                this.ds.send(dp);
+                System.out.println("SENT DP THROUGH " + this.ip + ":" + this.port);
+            }
+            else
+                System.out.println("=====================================================>>>>> (SCHIPLISTENER) ERROR SENDING DP");
         }
         catch (IOException e) {
             e.printStackTrace();
@@ -96,6 +93,7 @@ public class SchedulerIPListener implements Runnable{
 
     public void run() {
 
+        this.isRunning = true;
         int MTU;
         int tries = 0;
 
@@ -110,18 +108,16 @@ public class SchedulerIPListener implements Runnable{
 
         if (tries == 4)
             MTU = 1500;
-        //System.out.println("GOT MTU = " + MTU);
 
         byte[] buf = new byte[MTU];
 
         DatagramPacket dp = new DatagramPacket(buf, buf.length);
 
         this.connectionLock.lock();
-        while(this.hasConnection && this.run){
+        while(this.run && this.hasConnection){
             this.connectionLock.unlock();
             try {
-                ds.receive(dp);
-
+                this.ds.receive(dp);
                 System.out.println("(SCHEDULERIPLISTENER) RECEIVED SOMETHING FROM " + dp.getAddress());
                 sch.processReceivedDP(dp, this.nic, this.ip, this.port);
 
@@ -138,6 +134,8 @@ public class SchedulerIPListener implements Runnable{
             this.connectionLock.lock();
         }
         this.connectionLock.unlock();
-        System.out.println("SCHEDULERIPLISTENER DEAD");
+        this.isRunning = false;
+
+        System.out.println("SCHEDULERIPLISTENER (" + this.ip + ":" + this.port + ")DEAD");
     }
 }

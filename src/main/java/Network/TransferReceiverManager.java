@@ -343,31 +343,31 @@ public class TransferReceiverManager implements Runnable{
 
     private void sendOver(boolean wasInterrupted) {
 
-        Over over = new Over(tmi.transferID, wasInterrupted);
+        Over over = new Over(this.tmi.transferID, wasInterrupted);
 
         byte[] data = getBytesFromObject(over);
 
         this.destIPLock.lock();
-            DatagramPacket dp = new DatagramPacket(data, data.length, destIP, destPort);
+            DatagramPacket dp = new DatagramPacket(data, data.length, this.destIP, this.destPort);
         this.destIPLock.unlock();
 
         int tries = 0;
-        stats.markTransferEndTime();
+        this.stats.markTransferEndTime();
 
         while(tries < 10) {
             if (this.hasConnection) {
                 try {
-                    unicastSocket.send(dp);
+                    this.unicastSocket.send(dp);
                     tries++;
                     Thread.sleep(300);
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                 }
-                System.out.println("OVER SENT");
+                System.out.println("OVER SENT TO " + this.destIP + ":" + this.destPort);
             }
         }
-        stats.markProtocolEndTime();
-        stats.printStats();
+        this.stats.markProtocolEndTime();
+        this.stats.printStats();
 
     }
 

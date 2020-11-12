@@ -1,10 +1,7 @@
-import Data.ChunkManager;
-import Data.ChunkManagerMetaInfo;
 import Data.DataManager;
 import Network.ListenerMainUnicast;
 import Network.NIC;
 import Network.Scheduler;
-import Network.TransferMultiSender;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -82,12 +79,12 @@ public class Main{
                     }
 
                     case 5: {
-                        startSender(sc, docHash, 5000);
+                        startSender(sc, docHash, 3333);
                         break;
                     }
 
                     case 6:{
-                        startSender(sc, docHash, 5000);
+                        startSender(sc, docHash, 3333);
                         break;
                     }
                     case 7:{
@@ -118,14 +115,16 @@ public class Main{
 
         if(nicFolder.exists() && nicFolder.isDirectory()){
             nicNames = nicFolder.list();
-            for(String nicName : nicNames)
-                if(!nicName.equals("lo")) {
-                    wirelessFolder = new File(nicPath + nicName + wirelessPath);
-                    if(wirelessFolder.exists() && wirelessFolder.isDirectory())
-                        nics.add(new NIC(nicName, true, sc));
-                    else
-                        nics.add(new NIC(nicName, false, sc));
-                }
+            if(nicNames != null) {
+                for (String nicName : nicNames)
+                    if (!nicName.equals("lo")) {
+                        wirelessFolder = new File(nicPath + nicName + wirelessPath);
+                        if (wirelessFolder.exists() && wirelessFolder.isDirectory())
+                            nics.add(new NIC(nicName, true, sc));
+                        else
+                            nics.add(new NIC(nicName, false, sc));
+                    }
+            }
         }
     }
 
