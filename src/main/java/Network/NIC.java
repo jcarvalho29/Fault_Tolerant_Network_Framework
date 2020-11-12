@@ -403,6 +403,46 @@ public class NIC {
         return ips;
     }
 
+    public ArrayList<InetAddress> getLinkLocalAddresses() {
+        this.addresses_Lock.lock();
+        ArrayList<InetAddress> ips = new ArrayList<InetAddress>(this.addresses);
+        this.addresses_Lock.unlock();
+
+        int size = ips.size();
+        InetAddress ip;
+
+        for (int i = 0; i < size; i++){
+            ip = ips.get(0);
+            if (!ip.isLinkLocalAddress()){
+                ips.remove(ip);
+                i--;
+                size--;
+            }
+        }
+
+        return ips;
+    }
+
+    public ArrayList<InetAddress> getNONLinkLocalAddresses() {
+        this.addresses_Lock.lock();
+        ArrayList<InetAddress> ips = new ArrayList<InetAddress>(this.addresses);
+        this.addresses_Lock.unlock();
+
+        int size = ips.size();
+        InetAddress ip;
+
+        for (int i = 0; i < size; i++){
+            ip = ips.get(0);
+            if (ip.isLinkLocalAddress()){
+                ips.remove(ip);
+                i--;
+                size--;
+            }
+        }
+
+        return ips;
+    }
+
     public boolean checkConnectionStatus(){
         boolean res = false;
 
