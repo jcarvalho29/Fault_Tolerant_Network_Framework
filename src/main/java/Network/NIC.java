@@ -414,9 +414,9 @@ public class NIC {
         InetAddress ip;
 
         for (int i = 0; i < size; i++){
-            ip = ips.get(0);
+            ip = ips.get(i);
             if (!ip.isLinkLocalAddress()){
-                ips.remove(ip);
+                ips.remove(i);
                 i--;
                 size--;
             }

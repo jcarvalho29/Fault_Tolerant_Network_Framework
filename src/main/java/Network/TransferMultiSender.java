@@ -78,68 +78,7 @@ public class TransferMultiSender{
         this.receivedMissingChunkIDs = false;
 
         this.stats = new TransmitterStats();
-
-        //this.ownUnicastPort = ownUnicastPort;
-
-        //changeOwnIP(nic.addresses, false);
-
     }
-
-/*    private final Runnable sendTransferMetaInfo = () -> {
-        this.TMRI_Lock.lock();
-        if(!this.receivedTransferMultiReceiverInfo) {
-            this.timeout_Lock.lock();
-            this.consecutiveTimeouts++;
-            this.timeout_Lock.unlock();
-
-            if (this.consecutiveTimeouts < 13) {
-                TransferMetaInfo tmi;
-                ChunkManagerMetaInfo cmmi = new ChunkManagerMetaInfo(this.cm.mi);
-                cmmi.missingChunks = null;
-                cmmi.numberOfChunksInArray = 0;
-                cmmi.full = false;
-
-                if (this.DocumentName == null)
-                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.transferID, this.nic.getSpeed()/1000, this.nic.isWireless, this. cmmi, this.confirmation);
-                else
-                    tmi = new TransferMetaInfo(this.nodeIdentifier, this.transferID, this.nic.getSpeed()/1000, this.nic.isWireless, cmmi, this.DocumentName, this.confirmation);
-
-                byte[] info = getBytesFromObject((Object) tmi);
-                System.out.println("TRANSFERMETAIFO SIZE " + info.length);
-
-                DatagramPacket dp = new DatagramPacket(info, info.length, this.destIP, this.destUnicastPort);
-
-                int tries = 0;
-                boolean sent = false;
-                while (this.hasConnection && !sent && tries < 3) {
-                    try {
-                        tries++;
-                        this.unicastSocket.send(dp);//!!!!!!!!!!!!!!!!!!!!!!!EXCEPTION!!
-                        sent = true;
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    this.TMRI_Lock.unlock();
-                }
-
-                if(sent) {
-                    System.out.println("SENT TRANSFERMETAINFO TO " + this.destIP + " " + this.destUnicastPort);
-                    this.stats.markTmiSendTime();
-                }
-                else{
-                    System.out.println("NO CONNECTION WHILE TRYING TO SEND TRANSFERMETAINFO");
-                }
-            }
-        }
-        else{
-            this.timeout_Lock.lock();
-            this.consecutiveTimeouts = 0;
-            this.timeout_Lock.unlock();
-            this.TMRI_Lock.unlock();
-            this.transferMetaInfoSES.shutdown();
-        }
-
-    };*/
 
     private final Runnable updateTimeoutStatus = () ->{
 
@@ -180,38 +119,6 @@ public class TransferMultiSender{
             this.timeout_Lock.unlock();
         }
     };
-
-/*    private void processDatagramPacket(DatagramPacket dp) {
-
-        Object obj = getObjectFromBytes(dp.getData());
-        InetAddress dpAddress;
-
-        if(obj instanceof TransferMultiReceiverInfo){
-
-            TransferMultiReceiverInfo tmri = (TransferMultiReceiverInfo) obj;
-
-            processTransferMultiReceiverInfo(tmri);
-        }
-        else{
-            if(obj instanceof MissingChunkIDs) {
-
-                    processMissingChunkIDs(mcid);
-                }
-            }
-            else {
-                if(obj instanceof IPChange){
-                    IPChange ipc = (IPChange) obj;
-
-
-                }
-                if(obj instanceof Over){
-                    Over over = (Over) obj;
-
-
-                }
-            }
-        }
-    }*/
 
     public void processTransferMultiReceiverInfo(TransferMultiReceiverInfo tmri, long receiveTime){
 

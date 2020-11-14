@@ -100,6 +100,7 @@ public class SchedulerIPListener implements Runnable{
                 System.out.println("=====================================================>>>>> (SCHIPLISTENER) ERROR SENDING DP");
         }
         catch (IOException e) {
+            System.out.println("IP " + this.ip);
             e.printStackTrace();
         }
     }
