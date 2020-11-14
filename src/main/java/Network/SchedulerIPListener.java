@@ -4,6 +4,7 @@ import Messages.TransferMetaInfo;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class SchedulerIPListener implements Runnable{
@@ -22,7 +23,7 @@ public class SchedulerIPListener implements Runnable{
     private ReentrantLock connectionLock;
 
 
-    public SchedulerIPListener(Scheduler sch, NIC nic, InetAddress ip, int port){
+    public SchedulerIPListener(Scheduler sch, NIC nic, InetAddress ip){
         System.out.println("===============================================================>NEW IP LISTENER");
         this.run = true;
         this.isRunning = false;
@@ -32,24 +33,36 @@ public class SchedulerIPListener implements Runnable{
 
         this.nic = nic;
         this.ip = ip;
-        this.port = port;
         this.isLinkLocal = this.ip.isLinkLocalAddress();
 
         bindDatagramSocket();
     }
 
     private void bindDatagramSocket() {
-        try {
+        boolean bound = false;
+        Random rand = new Random();
 
-            this.ds = new DatagramSocket(null);
-            InetSocketAddress isa = new InetSocketAddress(this.ip, this.port);
-            this.ds.bind(isa);
-            System.out.println("BOUND TO " + this.ip + " " + this.port);
-            this.hasConnection = true;
-        }
-        catch (SocketException e) {
-            System.out.println("(SCHEDULERIPLISTENER) ERROR BINDING TO " + this.ip + " " + this.port);
-            e.printStackTrace();
+        while (!bound) {
+            try {
+                this.port = rand.nextInt(999) + 4000;
+                this.ds = new DatagramSocket(null);
+                InetSocketAddress isa = new InetSocketAddress(this.ip, this.port);
+                this.ds.bind(isa);
+                System.out.println("(SECHDULERIPLISTENER) BOUND TO " + this.ip + ":" + this.port);
+                this.hasConnection = true;
+                bound = true;
+            } catch (SocketException e) {
+                System.out.println("(SCHEDULERIPLISTENER) ERROR BINDING TO " + this.ip + ":" + this.port);
+                //e.printStackTrace();
+            }
+
+            if(!bound){
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 /*

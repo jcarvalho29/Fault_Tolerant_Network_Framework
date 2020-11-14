@@ -52,7 +52,7 @@ public class FastUnicastListener implements Runnable {
         boolean b = true;
         while(b) {
             try {
-                this.port = rand.nextInt(20000) + 30000;
+                this.port = rand.nextInt(24999) + 10000;
                 this.ds = new DatagramSocket(null);
                 InetSocketAddress isa = new InetSocketAddress(this.ip, this.port);
                 this.ds.bind(isa);
@@ -73,20 +73,33 @@ public class FastUnicastListener implements Runnable {
 
     public void changeIP(InetAddress newIP){
         if(newIP != null) {
-            try {
-                this.arrayLock.lock();
+            boolean bound = false;
+            while(!bound) {
+                try {
+                    this.arrayLock.lock();
 
-                this.ds.close();
-                this.ds = new DatagramSocket(null);
-                InetSocketAddress isa = new InetSocketAddress(newIP, this.port);
-                this.ds.bind(isa); // !!!! ADDRESS ALREADY IN USE
-                this.ds.setReceiveBufferSize(3000000);
+                    this.ds.close();
+                    this.ds = new DatagramSocket(null);
+                    InetSocketAddress isa = new InetSocketAddress(newIP, this.port);
+                    this.ds.bind(isa); // !!!! ADDRESS ALREADY IN USE
+                    System.out.println("(FASTUNICASTLISTENER) BOUND TO " + this.ip + ":" + this.port);
+                    this.ds.setReceiveBufferSize(3000000);
 
-                this.ip = newIP;
-                this.arrayLock.unlock();
-            } catch (SocketException e) {
-                e.printStackTrace();
-                System.out.println("OLD IP " + this.ip + " NEW IP " + newIP);
+                    this.ip = newIP;
+                    bound = true;
+                    this.arrayLock.unlock();
+                } catch (SocketException e) {
+                    //e.printStackTrace();
+                    System.out.println("(FASTUNICASTLISTENER) ERROR BINDING TO " + this.ip + ":" + this.port);
+                }
+
+                if(!bound){
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
             }
         }
     }

@@ -1,13 +1,11 @@
 package Network;
 
 import Data.ChunkManager;
-import Data.ChunkManagerMetaInfo;
 import Messages.*;
 
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
-import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -18,7 +16,6 @@ public class TransferMultiSender{
     private Scheduler sch;
 
     public boolean run = true;
-    private boolean receivedOver = false;
     public boolean wasInterrupted = false;
     private boolean hasConnection;
 
@@ -388,19 +385,17 @@ public class TransferMultiSender{
     }
 
     public void processOver(Over over){
-        if(over.transferID == this.transferID)
-            this.receivedOver = true;
-
-        if(over.isInterrupt) {
-            this.wasInterrupted = true;
-            this.sch.markAsInterrupted(nicName, transferID);
-            System.out.println("=>>> INTERRUPTED");
+        if(over.transferID == this.transferID) {
+            if (over.isInterrupt) {
+                this.wasInterrupted = true;
+                this.sch.markAsInterrupted(nicName, transferID);
+                System.out.println("=>>> INTERRUPTED");
+            } else {
+                this.sch.markAsFinished(nicName, transferID);
+                System.out.println("=>>> TRANSFER ENDED");
+            }
+            this.kill();
         }
-        else {
-            this.sch.markAsFinished(nicName, transferID);
-            System.out.println("=>>> TRANSFER ENDED");
-        }
-        this.kill();
     }
 
     public void kill(){
@@ -480,7 +475,6 @@ public class TransferMultiSender{
 
     public void updateConnectionStatus(boolean value){
 
-        //boolean oldHasConnection = this.hasConnection;
         this.hasConnection = value;
 
         for(FastUnicastSender fus : this.fastSenders)

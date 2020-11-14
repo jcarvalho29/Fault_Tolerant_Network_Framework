@@ -286,8 +286,6 @@ public class Main{
         }
 */
         sc.schedule(infoHash, destIP, destPort, true);
-
-        //CHANGE (PASSOU PARA O SCHEDULER)
     }
 
     private static String createMessage(DataManager dm, int maxPayloadSize) {

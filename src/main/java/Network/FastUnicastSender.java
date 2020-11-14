@@ -109,7 +109,7 @@ public class FastUnicastSender implements Runnable{
         try {
             Random rand = new Random();
             this.ds = new DatagramSocket(null);
-            this.ownPort = rand.nextInt(20000) + 30000;
+            this.ownPort = rand.nextInt(24999) + 35000;
             InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
             this.ds.bind(isa);
             this.ds.setSendBufferSize(3000000);
@@ -133,25 +133,38 @@ public class FastUnicastSender implements Runnable{
 
     public void changeOwnIP(InetAddress newOwnIP){
         System.out.println("\t\t\tCHANGE OWNIP CALLED IN FASTSENDER");
-        try {
+        boolean bound = false;
 
-            this.ownIP = newOwnIP;
+        this.ownIP = newOwnIP;
 
-            this.packetLock.lock();
+        this.packetLock.lock();
 
-            this.ds.close();
+        this.ds.close();
 
-            this.ds = new DatagramSocket(null);
-            InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
-            this.ds.bind(isa);
 
-            this.ds.setSendBufferSize(3000000);
+        while (!bound) {
+            try {
+                this.ds = new DatagramSocket(null);
+                InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
+                this.ds.bind(isa);
+                bound = true;
+                this.ds.setSendBufferSize(3000000);
+                System.out.println("(FASTUNICASTSENDER) BOUND TO " + this.ownIP + ":" + this.ownPort);
+                changeHasConnection(true);
+                this.packetLock.unlock();
 
-            changeHasConnection(true);
+            } catch (SocketException e) {
+                System.out.println("(FASTUNICASTSENDER) ERROR BINDING TO " + this.ownIP + ":" + this.ownPort);
+                e.printStackTrace();
+            }
 
-            this.packetLock.unlock();
-        } catch (SocketException e) {
-            e.printStackTrace();
+            if(!bound){
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -179,9 +192,7 @@ public class FastUnicastSender implements Runnable{
 
         this.chunkIDsLock.lock();
 
-        //Change amount of chunks to be loaded to consecutiveSends
-        //take into consideration that there might be some loaded chunks
-       /* System.out.println("\t( CHUNKARRAYS SIZE " + this.chunkArrays.size() + " )");
+        /* System.out.println("\t( CHUNKARRAYS SIZE " + this.chunkArrays.size() + " )");
         System.out.println("\t( CHUNKIDSARRAY SIZE " + this.chunkIDsArray.size() + " )");
         System.out.println("\t( PRESELECTED NULL? " + (this.preSelectedChunkIDs == null) + " )");
         System.out.println("\t( CHUNKSTOSEND NULL? " + (this.chunksToSend == null) + " )");
@@ -377,7 +388,7 @@ public class FastUnicastSender implements Runnable{
 
     public void kill(){
         System.out.println("KILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILL");
-        //CHANGE
+
         this.isRunning_lock.lock();
         this.run = false;
         this.ds.close();

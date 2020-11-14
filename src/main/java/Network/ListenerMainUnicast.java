@@ -7,12 +7,7 @@ import Messages.TransferMetaInfo;
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class ListenerMainUnicast implements Runnable{
 
@@ -52,6 +47,30 @@ public class ListenerMainUnicast implements Runnable{
         changeIP(nic.addresses);
     }
 
+    private void bindDatagramSocket(){
+        boolean bound = false;
+        while(!bound) {
+            try {
+                this.unicastSocket = new DatagramSocket(null);
+                InetSocketAddress isa = new InetSocketAddress(this.currentIP, this.unicastPort);
+                this.unicastSocket.bind(isa);
+                System.out.println("(LISTENERMAINUNICAST) BOUND TO " + this.currentIP + ":" + this.unicastPort);
+                bound = true;
+            } catch (SocketException e) {
+                //e.printStackTrace();
+                System.out.println("(LISTENERMAINUNICAST) ERROR BINDING TO " + this.currentIP + ":" + this.unicastPort);
+            }
+
+            if(!bound){
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
     public void changeIP(ArrayList<InetAddress> addresses) {
 
         if(!addresses.contains(this.currentIP)) {
@@ -63,37 +82,30 @@ public class ListenerMainUnicast implements Runnable{
             }
 
             if (ip != null) {
-                try {
-                    this.currentIP = ip;
+                this.currentIP = ip;
 
-                    if(this.unicastSocket != null) {
-                        this.unicastSocket.close();
-                        System.out.println("CLOSED UNICASTSOCKET!!");
-                    }
-
-                    this.unicastSocket = new DatagramSocket(null);
-                    InetSocketAddress isa = new InetSocketAddress(this.currentIP, this.unicastPort);
-                    this.unicastSocket.bind(isa);
-
-                    System.out.println("hasConnection? " + this.hasConnection);
-
-                    this.hasConnection = true;
-                    Thread t = new Thread(this);
-                    t.start();
-                    System.out.println("CHANGED IP AND CREATED NEW THREAD");
-
-                    System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + "\nhasConnection? " + this.hasConnection);
-
-                    for (TransferReceiverManager trm : this.infoReceiverManager.values())
-                        trm.changeIP(this.currentIP);
+                if(this.unicastSocket != null && !this.unicastSocket.isClosed()) {
+                    System.out.println("UNICASTSOCKET WASN'T CLOSED BEFORE THE CHANGEIP BIND");
+                    this.unicastSocket.close();
                 }
-                catch (SocketException e) {
-                    e.printStackTrace();
-                    System.out.println(ip);
-                }
+
+                bindDatagramSocket();
+
+                System.out.println("hasConnection? " + this.hasConnection + " => TRUE");
+
+                this.hasConnection = true;
+                Thread t = new Thread(this);
+                t.start();
+                System.out.println("CHANGED IP AND CREATED NEW THREAD (changeIP)");
+
+                System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + "\nhasConnection? " + this.hasConnection);
+
+                for (TransferReceiverManager trm : this.infoReceiverManager.values())
+                    trm.changeIP(this.currentIP);
             }
             else {
-                System.out.println("NEW IP SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
+                System.out.println("NEW ADDRESSES SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
+                this.currentIP = null;
                 updateConnectionStatus(false);
             }
         }
@@ -107,18 +119,27 @@ public class ListenerMainUnicast implements Runnable{
     }
 
     public void updateConnectionStatus(boolean value){
-
         boolean oldHasConnection = this.hasConnection;
         this.hasConnection = value;
+            System.out.println("UPDATED CONNECTION STATUS FROM " + oldHasConnection + " TO " + value);
+
+        if(value && !oldHasConnection && this.currentIP != null){
+            bindDatagramSocket();
+            new Thread(this).start();
+            System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + " (updateConnectionStatus)");
+        }
+        else{
+            if(!value)
+                this.unicastSocket.close();
+        }
 
         for (TransferReceiverManager trm : this.infoReceiverManager.values())
             trm.updateHasConnection(value);
 
-        if(value && !oldHasConnection) {
-            System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + " NO NEW THREAD");
-/*            Thread t = new Thread(this);
-            t.start();*/
-        }
+/*        if(value && !oldHasConnection) {
+           Thread t = new Thread(this);
+            t.start();
+        }*/
 
     }
 
@@ -142,7 +163,7 @@ public class ListenerMainUnicast implements Runnable{
             TransferMetaInfo tmi;
             tmi = (TransferMetaInfo) obj;
 
-            //MUDAR PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS
+            //CHANGE PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS ??
 
             if (!this.receivedIDs.contains(tmi.transferID)) {
                 this.receivedIDs.add(tmi.transferID);
@@ -156,11 +177,12 @@ public class ListenerMainUnicast implements Runnable{
                 }
 
 
-                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, dp.getAddress(), dp.getPort(), this.nic, tmi, 1);
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, this.currentIP, dp.getAddress(), dp.getPort(), this.nic, tmi, 1);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
                 this.infoReceiverManager.put(tmi.transferID, trm);
-            } else {
+            }
+            else {
                 this.infoReceiverManager.get(tmi.transferID).sendTransferMultiReceiverInfo();
                 System.out.println("TMRI RESENT");
             }
@@ -179,7 +201,7 @@ public class ListenerMainUnicast implements Runnable{
         }
     }
     public void run(){
-        System.out.println("NEW (LISTENERMAINUNICAST)");
+        System.out.println("NEW LISTENERMAINUNICAST THREAD");
 
         int MTU;
         int tries = 0;
@@ -200,7 +222,7 @@ public class ListenerMainUnicast implements Runnable{
         DatagramPacket dp;
         dp = new DatagramPacket(buf, MTU); // EXCEPTION o MTU PODE SER 0 QUANDO nenhum NIC TEM UMA CONEXÃO ON STARTUP (COM O SLEEP EM CIMA NAO)
 
-        while(this.hasConnection && this.run){
+        while(!this.unicastSocket.isClosed() && this.hasConnection && this.run){
             try {
                 this.unicastSocket.receive(dp);
 
@@ -211,19 +233,17 @@ public class ListenerMainUnicast implements Runnable{
                 dp = new DatagramPacket(buf, MTU);
             }
             catch (SocketException se){
-                if(!this.unicastSocket.isClosed()) {
+                while(!this.unicastSocket.isClosed()) {
                     System.out.println("SAY WHAT!?!?!?!??!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!?!");
                     this.unicastSocket.close();
                 }
                 System.out.println("\t=>LMU DATAGRAMSOCKET CLOSED? " + this.unicastSocket.isClosed());
-
-                //close = true;
             }
             catch (IOException e) {
                 e.printStackTrace();
             }
         }
-        System.out.println("DIED hasConnection? " + this.hasConnection + " run? " + this.run);
+        System.out.println("DIED unicastSocket.isClosed? " + this.unicastSocket.isClosed() + " hasConnection? " + this.hasConnection + " run? " + this.run);
     }
 
     private Object getObjectFromBytes(byte[] data){
@@ -254,6 +274,6 @@ public class ListenerMainUnicast implements Runnable{
 
     public void endTransfer(int id) {
         this.infoReceiverManager.remove(id);
-        this.receivedIDs.remove(new Integer(id));
+        this.receivedIDs.remove((Object)id);
     }
 }

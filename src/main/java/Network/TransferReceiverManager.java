@@ -5,11 +5,9 @@ import Data.DataManager;
 import Messages.*;
 
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class TransferReceiverManager implements Runnable{
@@ -24,6 +22,9 @@ public class TransferReceiverManager implements Runnable{
     private ReentrantLock destIPLock;
 
     private DatagramSocket unicastSocket;
+    private InetAddress ownIP;
+    private int ownPort;
+
     private boolean hasConnection;
 
     private NIC nic;
@@ -44,7 +45,7 @@ public class TransferReceiverManager implements Runnable{
     private boolean hasUpdatedCycleStats;
     private boolean run = true;
 
-    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress destIP, int destPort, NIC nic, TransferMetaInfo tmi, int numberOfListeners){
+    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress ownIP, InetAddress destIP, int destPort, NIC nic, TransferMetaInfo tmi, int numberOfListeners){
 
         this.mainListener = ml;
         this.dm = dm;
@@ -64,15 +65,51 @@ public class TransferReceiverManager implements Runnable{
         this.fastListeners = new ArrayList<FastUnicastListener>();
         this.fastListenersPorts = new ArrayList<Integer>();
 
+        this.ownIP = ownIP;
+        Random rand = new Random();
+        boolean done = false;
 
-        try {
-            this.unicastSocket = new DatagramSocket();
-            this.hasConnection = true;
-        } catch (SocketException e) {
-            e.printStackTrace();
+        while(!done){
+            try {
+                this.ownPort = rand.nextInt(999) + 5000;
+                this.unicastSocket = new DatagramSocket(null);
+                InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
+                this.unicastSocket.bind(isa);
+                this.hasConnection = true;
+                done = true;
+            } catch (SocketException e) {
+                e.printStackTrace();
+                System.out.println("(TRM) PORT COLLISION");
+            }
         }
 
         this.TransferMultiReceiverInfoReceived = false;
+    }
+
+    private void bindDatagramSocket(){
+        boolean bound = false;
+
+        while(!bound) {
+            try {
+                this.unicastSocket = new DatagramSocket(null);
+                InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
+                this.unicastSocket.bind(isa);
+                System.out.println("(TRANSFERRECEIVERMANAGER) BOUND TO " + this.ownIP + ":" + this.ownPort);
+                this.hasConnection = true;
+                bound = true;
+            } catch (SocketException e) {
+                System.out.println("(TRANSFERRECEIVERMANAGER) ERROR BINDING TO " + this.ownIP + ":" + this.ownPort);
+                //e.printStackTrace();
+            }
+
+            if(!bound){
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     public void kill(){
@@ -92,6 +129,11 @@ public class TransferReceiverManager implements Runnable{
     }
 
     public void changeIP(InetAddress newIP){
+        this.hasConnection = false;
+        this.unicastSocket.close();
+        this.ownIP = newIP;
+        bindDatagramSocket();
+
         //enviar multiplos ipchanges ao transmissor para que este saiba que mudei de IP
         IPChange ipc = new IPChange(this.tmi.transferID, newIP);
         byte[] serializedIPC = getBytesFromObject(ipc);

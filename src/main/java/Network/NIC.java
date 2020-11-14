@@ -72,12 +72,12 @@ public class NIC {
     }
 
     public void startIPChangeChecker(){
-        System.out.println("                            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        //System.out.println("                            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
         this.stopChecker_Lock.lock();
         this.stopChecker = false;
 
         if(!this.isCheckerRunning)
-            this.ipChangeCheckerSES.schedule(this.checkIPChange,1000, TimeUnit.MILLISECONDS);
+            this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
         this.stopChecker_Lock.unlock();
     }
 
@@ -143,7 +143,7 @@ public class NIC {
         this.stopChecker_Lock.unlock();
 
         //CASE THAT THERES NO NIC
-        System.out.println("CHECKING IP CHANGE " + this.name + " " + this.i++);
+        //System.out.println("CHECKING IP CHANGE " + this.name + " " + this.i++);
         try{
             //System.out.println("    TRYING TO GET NICS");
             NetworkInterface nic = NetworkInterface.getByName(this.name);
@@ -173,8 +173,9 @@ public class NIC {
                     this.addresses_Lock.lock();
 
                     System.out.println("OLD => " + this.addresses);
-                    this.addresses = newAddresses;
+                    this.addresses = new ArrayList<>(newAddresses);
                     System.out.println("NEW => " + this.addresses);
+                    this.addresses_Lock.unlock();
 
                     ListenerMainUnicast lmu;
                     TransferMultiSender tms;
@@ -183,15 +184,14 @@ public class NIC {
 
                     for(int i = 0; i < numberOfRcv; i++){
                         lmu = this.nicListeners_Rcv.get(i);
-                        lmu.changeIP(this.addresses);
+                        lmu.changeIP(newAddresses);
                     }
 
-                    this.scheduler.changeNICListenersIP(this, this.addresses);
+                    this.scheduler.changeNICListenersIP(this, newAddresses);
                     /*for(int i = 0; i < numberOfSnd; i++){
                         tms = this.nicListeners_Snd.get(i);
                         tms.changeOwnIP(this.addresses, true);
                     }*/
-                    this.addresses_Lock.unlock();
                 }
                 //else
                 //System.out.println("            NO");
@@ -204,7 +204,8 @@ public class NIC {
 
                 //System.out.println("        EXECUTANDO COMANDOS");
                 if(this.isWireless)
-                    getWirelessStatus();
+                    this.speed = 300;
+                    //getWirelessStatus();
                 else
                     getWiredSpeed();
                 //System.out.println("        COMANDOS EXECUTADOS");
@@ -220,9 +221,9 @@ public class NIC {
 
             }
             else{
-                System.out.println("        NOTHING");
+                //System.out.println("        NOTHING");
                 if(this.hasConnection) {
-                    System.out.println("        NO NIC CONNECTION ( " + this.name + " )");
+                    //System.out.println("        NO NIC CONNECTION ( " + this.name + " )");
                     this.mtu = 0;
                     this.speed = -1;
                     this.hasConnection = false;
@@ -236,18 +237,18 @@ public class NIC {
             e.printStackTrace();
         }
         this.stopChecker_Lock.lock();
-        System.out.println("============================>>>>>>>>>>CHECKING CHECKER");
+        //System.out.println("============================>>>>>>>>>>CHECKING CHECKER");
         if(!this.stopChecker){
-            System.out.println("RESTARTING IP CHECKER");
-            this.ipChangeCheckerSES.schedule(this.checkIPChange,1000, TimeUnit.MILLISECONDS);
+            //System.out.println("RESTARTING IP CHECKER");
+            this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
         }
         else {
             this.isCheckerRunning = false;
-            System.out.println("    STOPPING IP CHECKER");
+            //System.out.println("    STOPPING IP CHECKER");
         }
         this.stopChecker_Lock.unlock();
 
-        System.out.println("==========\n");
+        //System.out.println("==========\n");
     };
 
     private void updateNICListenersConnectionStatus(boolean value){
@@ -294,7 +295,7 @@ public class NIC {
 
                 String[] lineParams;
                 boolean correctNIC = false;
-                System.out.println("            GOT THE RESULTS");
+                //System.out.println("            GOT THE RESULTS");
 
                 for(int i = 0; i < aux.length; i++){
                     switch (i % 8){
@@ -396,6 +397,7 @@ public class NIC {
     }
 
     public ArrayList<InetAddress> getAddresses(){
+
         this.addresses_Lock.lock();
         ArrayList<InetAddress> ips = new ArrayList<InetAddress>(this.addresses);
         this.addresses_Lock.unlock();
