@@ -44,7 +44,10 @@ public class ListenerMainUnicast implements Runnable{
         this.infoReceiverManager = new HashMap<Integer, TransferReceiverManager>();
         this.receivedIDs = new ArrayList<Integer>();
 
-        changeIP(nic.addresses);
+        if(this.isLocalLink)
+            changeIP(nic.getLinkLocalAddresses());
+        else
+            changeIP(nic.getNONLinkLocalAddresses());
     }
 
     private void bindDatagramSocket(){
@@ -129,7 +132,7 @@ public class ListenerMainUnicast implements Runnable{
             System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + " (updateConnectionStatus)");
         }
         else{
-            if(!value)
+            if(!value && this.unicastSocket != null)
                 this.unicastSocket.close();
         }
 

@@ -23,7 +23,8 @@ public class Hash {
 
     public String extractHash() {
         // digest() method called
-        // to calculate message digest of an input
+        // to calculate message digest of an inputCHECK HASH TIME => 24 ms
+
         // and return array of byte
         byte[] hash = this.md.digest();
 

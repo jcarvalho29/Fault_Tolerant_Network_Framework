@@ -1187,9 +1187,9 @@ public class ChunkManager {
     }
 
     public boolean checkAllChunksHash(){
+        Long start = System.currentTimeMillis();
         Hash h = new Hash(this.mi.HashAlgorithm);
 
-        ArrayList<Chunk> chunks = new ArrayList<Chunk>();
         String folderPath = this.Root + this.mi.Hash + "/Chunks/";
         Path p;
 
@@ -1203,6 +1203,7 @@ public class ChunkManager {
             }
         }
 
+        System.out.println("CHECK HASH TIME => " + (System.currentTimeMillis() - start) + " ms");
         return this.mi.Hash.equals(h.extractHash());
     }
     /*

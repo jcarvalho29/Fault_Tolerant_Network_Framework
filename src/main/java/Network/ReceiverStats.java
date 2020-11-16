@@ -51,6 +51,7 @@ public class ReceiverStats {
     //Velocidade da tranferência
     public long transferStartTime;
     public long transferEndTime;
+
     public long bytesReceived;
 
     public ArrayList<Integer> dpsPerCycle;
@@ -264,7 +265,7 @@ public class ReceiverStats {
         int nicSpeed;
 
         if(this.nic.isWireless)
-            nicSpeed = this.nic.getSpeed()/1000;
+            nicSpeed = this.nic.getSpeed()/1000; //CHANGE??
         else
             nicSpeed = this.nic.getSpeed();
 
@@ -277,27 +278,46 @@ public class ReceiverStats {
             System.out.println("LIMITED SPEED DUE TO WIRELESS CONNECTION");
         }
         else
-        {
             System.out.println("BOTH CONNECTIONS ARE WIRED ONES");
-        }
+
         if(limiterLinkSpeed == 0)
             limiterLinkSpeed = 1;
 
         int capacityInDPS = ((limiterLinkSpeed*1000000)/(this.averageDPSize*8));
 
-        int maxDPSPerListener = Math.max(Math.min(capacityInDPS/this.numberOfListeners, 5000), 1);
+        float dpsLimiterMultiplier = 1;
 
         if(this.numberOfMissingChunks/capacityInDPS > 20) {
             System.out.println("                    Multipliquei por 0.80");
-            maxDPSPerListener *= .80;
+            dpsLimiterMultiplier *= .80;
         }
+
+        int maxDPSPerListener = (int)(Math.max(Math.min(capacityInDPS/this.numberOfListeners, 5000), 10) * dpsLimiterMultiplier);
+        //CHANGE aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
+
+        int currentDPS = this.dpsPerCycle.get(this.dpsPerCycle.size()-1);
+        float currentDropRate = this.drops_PerTransferCycle.get(this.drops_PerTransferCycle.size()-1);
+
+        int lowerLimit = (int)(currentDPS - (currentDPS*.1));
+        int upperLimit = (int)(currentDPS + (currentDPS*.1));
+
+        if(currentDropRate > 0.1 && currentDropRate < 0.2){
+            currentDropRate = (float)0.1;
+        }
+        else
+            if(currentDropRate > 0.2)
+                currentDropRate /= 2;
+
+        if(maxDPSPerListener >= lowerLimit && maxDPSPerListener <= upperLimit)
+            maxDPSPerListener = Math.max((int)(maxDPSPerListener * currentDropRate), 10);
+        else
+            if(maxDPSPerListener < lowerLimit)
+                maxDPSPerListener = Math.max((int)(maxDPSPerListener * (currentDropRate * 0.5)), 10);
+            else
+                maxDPSPerListener = Math.max((int)(maxDPSPerListener * (currentDropRate * 2)), 10);
+
         System.out.println("DPS/LISTENER " + maxDPSPerListener);
 
-        //else
-            //maxDPSPerListener *= .90;
-
-        //CHANGE aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
-        maxDPSPerListener = 100;
         this.dpsPerCycle.add(maxDPSPerListener);
 
     }

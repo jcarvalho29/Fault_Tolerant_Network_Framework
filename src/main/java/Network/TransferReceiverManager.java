@@ -305,7 +305,7 @@ public class TransferReceiverManager implements Runnable{
                 }
 
             }
-            System.out.println("                NOT THE CYCLE");
+            System.out.println("                NOT THE 1 CYCLE");
 
             this.stats.markFirstRetransmittedCMReceivedTime(min);
 

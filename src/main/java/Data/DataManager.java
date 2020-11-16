@@ -601,7 +601,8 @@ public class DataManager {
     public boolean isReadyToBeSent(String hash){
         boolean res = false;
 
-        if((this.dmMI.isMessageFull.containsKey(hash) && this.dmMI.isMessageFull.get(hash)) || (this.dmMI.isDocumentFull.containsKey(hash) && this.dmMI.isDocumentFull.get(hash)))
+        if((this.dmMI.isMessageFull.containsKey(hash) && this.dmMI.isMessageFull.get(hash) && (this.messages.get(hash).checkAllChunksHash()))
+                || (this.dmMI.isDocumentFull.containsKey(hash) && this.dmMI.isDocumentFull.get(hash) && (this.documents.get(hash).cm.checkAllChunksHash())))
             res = true;
 
         return res;

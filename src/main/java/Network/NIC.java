@@ -1,5 +1,7 @@
 package Network;
 
+import Messages.Knock;
+
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -38,6 +40,7 @@ public class NIC {
     private ScheduledExecutorService ipChangeCheckerSES;
 
     private ArrayList<ListenerMainUnicast> nicListeners_Rcv;
+    private ArrayList<KnockManager> knockManagers;
     private Scheduler scheduler;
 
     public NIC(String nicName, boolean isWireless, Scheduler scheduler){
@@ -62,8 +65,8 @@ public class NIC {
 
         this.statsLock = new ReentrantLock();
         this.nicListeners_Rcv = new ArrayList<ListenerMainUnicast>();
+        this.knockManagers = new ArrayList<KnockManager>();
         this.scheduler = scheduler;
-        //this.nicListeners_Snd = new ArrayList<TransferMultiSender>();
 
         this.ipChangeCheckerSES = Executors.newSingleThreadScheduledExecutor();
 
@@ -88,7 +91,7 @@ public class NIC {
 
     }
 
-    public void registerNewLMUListener(ListenerMainUnicast lmu){
+    public void registerLMUListener(ListenerMainUnicast lmu){
         System.out.println("ESTA A TENTAR LIGAR O CHECKER PORQUE CRIOU UM LMU NOVO");
         if(!this.nicListeners_Rcv.contains(lmu))
             this.nicListeners_Rcv.add(lmu);
@@ -103,8 +106,29 @@ public class NIC {
     public void removeLMUListener(ListenerMainUnicast lmu){
         this.nicListeners_Rcv.remove(lmu);
 
-        //if(this.nicListeners_Rcv.isEmpty() && this.nicListeners_Snd.isEmpty())
-        if(this.nicListeners_Rcv.isEmpty() && this.scheduler.hasTMIToSend()){
+        if(this.nicListeners_Rcv.isEmpty() && this.scheduler.hasTMIToSend() && this.knockManagers.isEmpty()){
+            this.stopChecker_Lock.lock();
+            this.stopChecker = true;
+            this.stopChecker_Lock.unlock();
+        }
+    }
+
+    public void registerKnockManager(KnockManager km){
+        System.out.println("ESTA A TENTAR LIGAR O CHECKER PORQUE CRIOU UM KNOCKMANAGER NOVO");
+        if(!this.knockManagers.contains(km))
+            this.knockManagers.add(km);
+
+        this.stopChecker_Lock.lock();
+        if(this.stopChecker) {
+            startIPChangeChecker();
+        }
+        this.stopChecker_Lock.unlock();
+    }
+
+    public void removeKnockManager(KnockManager km){
+        this.knockManagers.remove(km);
+
+        if(this.knockManagers.isEmpty() && this.scheduler.hasTMIToSend() && this.nicListeners_Rcv.isEmpty()){
             this.stopChecker_Lock.lock();
             this.stopChecker = true;
             this.stopChecker_Lock.unlock();
@@ -112,29 +136,29 @@ public class NIC {
     }
 
     public void markSchedulerAsActive(){
-        System.out.println("==============> MARKING " + this.name + " ACTIVE");
+        System.out.println("(NIC) MARKING " + this.name + " ACTIVE");
         this.stopChecker_Lock.lock();
         if(this.stopChecker) {
             startIPChangeChecker();
-            System.out.println("    ==============> MARKED " + this.name + " ACTIVE");
+            System.out.println("    (NIC) MARKED " + this.name + " ACTIVE");
         }
         else
-            System.out.println("    ==============> " + this.name + " ALREADY ACTIVE");
+            System.out.println("    (NIC) " + this.name + " ALREADY ACTIVE");
         this.stopChecker_Lock.unlock();
 
     }
 
     public void markSchedulerAsInactive(){
-        System.out.println("==============> MARKING " + this.name + " INACTIVE");
+        System.out.println("(NIC) MARKING " + this.name + " INACTIVE");
 
-        if(this.nicListeners_Rcv.size() == 0) {
+        if(this.nicListeners_Rcv.isEmpty() && this.knockManagers.isEmpty()) {
             this.stopChecker_Lock.lock();
             this.stopChecker = true;
             this.stopChecker_Lock.unlock();
-            System.out.println("    ==============> MARKED " + this.name + " INACTIVE");
+            System.out.println("    (NIC) MARKED " + this.name + " INACTIVE");
         }
         else
-            System.out.println("    ==============> " + this.name + " HAS " + this.nicListeners_Rcv.size() + " LMUs ACTIVE (CANT STOP IT)");
+            System.out.println("    (NIC) " + this.name + " HAS:\n\t" + this.nicListeners_Rcv.size() + " LMUs ACTIVE\n\t" + this.knockManagers.size() + " KM ACTIVE");
     }
 
     private final Runnable checkIPChange = () -> {
@@ -172,19 +196,24 @@ public class NIC {
                     //System.out.println("            YES");
                     this.addresses_Lock.lock();
 
-                    System.out.println("OLD => " + this.addresses);
+                    System.out.println("(NIC) " + this.name + " OLD => " + this.addresses);
                     this.addresses = new ArrayList<>(newAddresses);
-                    System.out.println("NEW => " + this.addresses);
+                    System.out.println("(NIC) " + this.name + " NEW => " + this.addresses);
                     this.addresses_Lock.unlock();
 
                     ListenerMainUnicast lmu;
-                    TransferMultiSender tms;
-                    int numberOfRcv = this.nicListeners_Rcv.size();
-                    //int numberOfSnd = this.nicListeners_Snd.size();
+                    KnockManager km;
+                    int numberOfLMU = this.nicListeners_Rcv.size();
+                    int numberOfKM = this.knockManagers.size();
 
-                    for(int i = 0; i < numberOfRcv; i++){
+                    for(int i = 0; i < numberOfLMU; i++){
                         lmu = this.nicListeners_Rcv.get(i);
                         lmu.changeIP(newAddresses);
+                    }
+
+                    for(int i = 0; i < numberOfKM; i++){
+                        km = this.knockManagers.get(i);
+                        km.changeIP(newAddresses);
                     }
 
                     this.scheduler.changeNICListenersIP(this, newAddresses);
@@ -204,8 +233,8 @@ public class NIC {
 
                 //System.out.println("        EXECUTANDO COMANDOS");
                 if(this.isWireless)
-                    this.speed = 300;
-                    //getWirelessStatus();
+                    //this.speed = 300;
+                    getWirelessStatus();
                 else
                     getWiredSpeed();
                 //System.out.println("        COMANDOS EXECUTADOS");
@@ -252,7 +281,7 @@ public class NIC {
     };
 
     private void updateNICListenersConnectionStatus(boolean value){
-        System.out.println("UPDATING " + this.name + " CONNECTION STATUS");
+        System.out.println("(NIC) UPDATING " + this.name + " CONNECTION STATUS TO " + value);
         ListenerMainUnicast lmu;
         TransferMultiSender tms;
         int numberOfRcv = this.nicListeners_Rcv.size();

@@ -104,7 +104,6 @@ public class Scheduler {
         for (Transmission t : this.smi.scheduledTransmissions.values())
            createTMIDP(t);
         this.smi_Lock.unlock();
-        System.out.println("=====================================> CREATED ALL TMI");
     }
 
 /*    private void refreshAllNICs() {
@@ -146,7 +145,7 @@ public class Scheduler {
 
         this.smi_Lock.unlock();
 
-        System.out.println("===============================> REGISTERED NIC");
+        System.out.println("(SCHEDULER) REGISTERED NIC");
     }
 
     private void createTMIDP(Transmission t){
@@ -479,7 +478,8 @@ public class Scheduler {
                 }
                 this.ipListeners_Lock.unlock();
             }
-            this.datagramPackets_Lock.unlock();
+            else
+                this.datagramPackets_Lock.unlock();
 
             //LINKLOCAL
             this.datagramPackets_LINKLOCAL_Lock.lock();
@@ -496,13 +496,12 @@ public class Scheduler {
                 }
                 this.ipListeners_Lock.unlock();
             }
-            this.datagramPackets_LINKLOCAL_Lock.unlock();
+            else
+                this.datagramPackets_LINKLOCAL_Lock.unlock();
         }
     }
 
     private void deleteNICListeners(String nicName){
-        System.out.println("DELETE ALL " + nicName + " SCHEDULERIPLISTENERS");
-
         this.ipListeners_Lock.lock();
 
         if(this.ipListeners_byNIC.containsKey(nicName)) {
@@ -538,20 +537,22 @@ public class Scheduler {
      * */
     public void schedule(String infoHash, InetAddress destIP, int destPort, boolean confirmation) {
 
-        Transmission t = new Transmission(this.rand.nextInt(), infoHash, destIP, destPort, confirmation);
+        if(this.dm.isReadyToBeSent(infoHash)) {
+            Transmission t = new Transmission(this.rand.nextInt(), infoHash, destIP, destPort, confirmation);
 
-        this.smi_Lock.lock();
-        this.smi.scheduledTransmissions.put(t.transferID, t);
-        this.smi_Lock.unlock();
+            this.smi_Lock.lock();
+            this.smi.scheduledTransmissions.put(t.transferID, t);
+            this.smi_Lock.unlock();
 
-        createTMIDP(t);
+            createTMIDP(t);
 
-        for(NIC nic : this.nics)
-            startupNICIPListeners(nic);
+            for (NIC nic : this.nics)
+                startupNICIPListeners(nic);
 
-        printSchedule();
+            printSchedule();
 
-        updateSchedulerMetaInfoFile();
+            updateSchedulerMetaInfoFile();
+        }
     }
 
     private void moveToOngoing(Transmission transmission) {
