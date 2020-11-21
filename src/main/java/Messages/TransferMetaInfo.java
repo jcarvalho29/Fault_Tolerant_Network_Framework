@@ -9,18 +9,18 @@ public class TransferMetaInfo implements Serializable {
     public int transferID;
 
     public int firstLinkSpeed;
-    public boolean isWireless;
+    //public boolean isWireless;
 
     public ChunkManagerMetaInfo cmmi;
     public String DocumentName;
     public Boolean Confirmation;
 
-/*    public TransferMetaInfo(int nodeIdentifier, int transferID, int firstLinkSpeed, boolean isWireless, ChunkManagerMetaInfo cmmmi, boolean confirmation) {
+/*    public TransferMetaInfo(int nodeIdentifier, int transferID, boolean isWireless, ChunkManagerMetaInfo cmmmi, boolean confirmation) {
         this.nodeIdentifier = nodeIdentifier;
         this.transferID = transferID;
 
-        this. firstLinkSpeed = firstLinkSpeed;
-        this.isWireless = isWireless;
+        //this. firstLinkSpeed = firstLinkSpeed;
+        //this.isWireless = isWireless;
 
         this.cmmi = cmmmi;
         this.DocumentName = null;
@@ -32,10 +32,15 @@ public class TransferMetaInfo implements Serializable {
         this.transferID = transferID;
 
         this. firstLinkSpeed = 10;
-        this.isWireless = true;
+        //this.isWireless = true;
 
         this.cmmi = cmmmi;
         this.DocumentName = documentName;
         this.Confirmation = confirmation;
+    }
+
+    public void setFirstLinkConnection(int firstLinkSpeed) {
+        this.firstLinkSpeed = firstLinkSpeed;
+        //this.isWireless = isWireless;
     }
 }

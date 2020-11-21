@@ -1,7 +1,5 @@
 package Network;
 
-import Messages.Knock;
-
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -25,8 +23,15 @@ public class NIC {
 
     private ReentrantLock statsLock;
 
-    private int speed;
+    public int speed;
     private int mtu;
+
+    private ReentrantLock nicSpeed_Lock;
+    private int scheduledTransfers;
+    private int activeTransfers;
+    /*private ArrayList<Integer> scheduledTransferIDs;
+    private ArrayList<Integer> activeTransferIDs;
+    private HashMap<Integer, Float> nicSpeed_byTransferID;*/
 
     private int i = 0;
     private int w_BitRate;
@@ -55,6 +60,12 @@ public class NIC {
         this.speed = -1;
         this.mtu = -1;
 
+        this.nicSpeed_Lock = new ReentrantLock();
+        this.scheduledTransfers = 0;
+        this.activeTransfers = 0;
+        /*this.transferID_byOrder = new ArrayList<Integer>();
+        this.nicSpeed_byTransferID = new HashMap<Integer, Float>();*/
+
         this.w_BitRate = -1;
         this.w_TxPower = -1;
         this.w_LinkQuality = 0;
@@ -75,12 +86,15 @@ public class NIC {
     }
 
     public void startIPChangeChecker(){
-        //System.out.println("                            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
         this.stopChecker_Lock.lock();
+        System.out.println("                            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
         this.stopChecker = false;
 
-        if(!this.isCheckerRunning)
+        if(!this.isCheckerRunning) {
+            System.out.println("                            BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+
             this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
+        }
         this.stopChecker_Lock.unlock();
     }
 
@@ -175,13 +189,15 @@ public class NIC {
             //System.out.println("    GOT NICS?");
             if(nic != null) {
                 //AQUI JA É CONFIRMADO QUE TEM CONEXÃO
+                this.hasConnection = true;
                 //System.out.println("        YES");
                 boolean change = false;
                 InetAddress address;
 
                 Enumeration<InetAddress> inetEnum = nic.getInetAddresses();
                 ArrayList<InetAddress> newAddresses = new ArrayList<InetAddress>();
-
+                boolean hasLinkLocal = false;
+                boolean hasNONLinkLocal = false;
                 this.addresses_Lock.lock();
                 while(inetEnum.hasMoreElements()) {
                     address = inetEnum.nextElement();
@@ -189,6 +205,10 @@ public class NIC {
                     if(!this.addresses.contains(address)) {
                         change = true;
                     }
+                    if(address.isLinkLocalAddress())
+                        hasLinkLocal = true;
+                    else
+                        hasNONLinkLocal = true;
                 }
                 this.addresses_Lock.unlock();
                 //System.out.println("        NEW IPS?");
@@ -200,6 +220,7 @@ public class NIC {
                     this.addresses = new ArrayList<>(newAddresses);
                     System.out.println("(NIC) " + this.name + " NEW => " + this.addresses);
                     this.addresses_Lock.unlock();
+
 
                     ListenerMainUnicast lmu;
                     KnockManager km;
@@ -216,11 +237,8 @@ public class NIC {
                         km.changeIP(newAddresses);
                     }
 
-                    this.scheduler.changeNICListenersIP(this, newAddresses);
-                    /*for(int i = 0; i < numberOfSnd; i++){
-                        tms = this.nicListeners_Snd.get(i);
-                        tms.changeOwnIP(this.addresses, true);
-                    }*/
+                    this.scheduler.changeSchedulerIP(this, newAddresses);
+
                 }
                 //else
                 //System.out.println("            NO");
@@ -237,20 +255,20 @@ public class NIC {
                     getWirelessStatus();
                 else
                     getWiredSpeed();
-                //System.out.println("        COMANDOS EXECUTADOS");
+                //System.out.println("        COMANDOS EXECUTADOS => " + this.speed);
 
                 //System.out.println("        FIM DO UPDATE DAS VARIAVEIS");
 
                 //System.out.println("        UPDATE CONNECTION STATUS");
 
-                if(!this.hasConnection) {
-                    this.hasConnection = true;
-                    updateNICListenersConnectionStatus(true);
-                }
+                updateNICListenersConnectionStatus(true, hasNONLinkLocal, hasLinkLocal);
 
             }
             else{
                 //System.out.println("        NOTHING");
+                this.addresses_Lock.lock();
+                this.addresses.clear();
+                this.addresses_Lock.unlock();
                 if(this.hasConnection) {
                     //System.out.println("        NO NIC CONNECTION ( " + this.name + " )");
                     this.mtu = 0;
@@ -258,9 +276,10 @@ public class NIC {
                     this.hasConnection = false;
 
                     //ATUALIZAR O ESTADO PARA NO CONNECTION
-                    updateNICListenersConnectionStatus(false);
+                    updateNICListenersConnectionStatus(false, false, false);
 
-                }}
+                }
+            }
 
         } catch (SocketException e) {
             e.printStackTrace();
@@ -268,35 +287,37 @@ public class NIC {
         this.stopChecker_Lock.lock();
         //System.out.println("============================>>>>>>>>>>CHECKING CHECKER");
         if(!this.stopChecker){
-            //System.out.println("RESTARTING IP CHECKER");
+            //System.out.println("RESTARTING " + this.name + " IP CHECKER");
             this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
         }
         else {
             this.isCheckerRunning = false;
-            //System.out.println("    STOPPING IP CHECKER");
+            //System.out.println("    STOPPING " + this.name + " IP CHECKER");
         }
         this.stopChecker_Lock.unlock();
 
         //System.out.println("==========\n");
     };
 
-    private void updateNICListenersConnectionStatus(boolean value){
-        System.out.println("(NIC) UPDATING " + this.name + " CONNECTION STATUS TO " + value);
+    private void updateNICListenersConnectionStatus(boolean value, boolean hasNONLinkLocal, boolean hasLinkLocal){
+        //System.out.println("(NIC) UPDATING " + this.name + " CONNECTION STATUS TO " + value);
         ListenerMainUnicast lmu;
-        TransferMultiSender tms;
+        KnockManager km;
         int numberOfRcv = this.nicListeners_Rcv.size();
-        //int numberOfSnd = this.nicListeners_Snd.size();
+        int numberOfKM = this.knockManagers.size();
+
 
         for(int i = 0; i < numberOfRcv; i++){
             lmu = this.nicListeners_Rcv.get(i);
             lmu.updateConnectionStatus(value);
         }
 
-        this.scheduler.changeNICConnectionStatus(this, value);
-/*        for(int i = 0; i < numberOfSnd; i++){
-            tms = this.nicListeners_Snd.get(i);
-            tms.updateConnectionStatus(value);
-        }*/
+        for(int i = 0; i < numberOfKM; i++){
+            km = this.knockManagers.get(i);
+            km.updateConnectionStatus(value);
+        }
+
+        this.scheduler.changeNICConnectionStatus(this, value, hasNONLinkLocal, hasLinkLocal);
     }
 
     private void getWirelessStatus() {
@@ -324,30 +345,36 @@ public class NIC {
 
                 String[] lineParams;
                 boolean correctNIC = false;
+                boolean connected = false;
                 //System.out.println("            GOT THE RESULTS");
 
                 for(int i = 0; i < aux.length; i++){
+                    //System.out.println(aux[i] + " i = " + i);
                     switch (i % 8){
                         case 0:{
                             lineParams = aux[i].split("  ");
                             correctNIC = lineParams[0].equals(this.name);
+                            connected = lineParams[3].contains("\"");
                             //System.out.println(Arrays.toString(lineParams));
                             break;
                         }
                         case 2:{
-                            if(correctNIC){
+                            if(correctNIC && connected){
                                 lineParams = aux[i].split("  ");
                                 String[] speed = lineParams[0].split("=")[1].split(" ");
-                                int unit = 1;
-                                if(speed[1].equals("Mb/s")) {
-                                    unit = 1000;
-                                }
-                                if(speed[1].equals("Gb/s")) {
-                                    unit *= 1000;
-                                }
                                 this.statsLock.lock();
-                                this.w_BitRate = (int)(Float.parseFloat(speed[0]) * unit);
-                                this.speed = this.w_BitRate;
+                                if(speed[1].equals("Kb/s")) {
+                                    this.w_BitRate = 1;
+                                    this.speed = 1;
+                                }
+                                else {
+                                    int unit = 1;
+                                    if (speed[1].equals("Gb/s")) {
+                                        unit = 1000;
+                                    }
+                                    this.w_BitRate = (int) Float.parseFloat(speed[0]) * unit;
+                                    this.speed = w_BitRate;
+                                }
                                 this.statsLock.unlock();
                                 //System.out.println(Arrays.toString(speed));
                             }
@@ -405,15 +432,167 @@ public class NIC {
         }
     }
 
-    public int getSpeed() {
+
+    /*public void registerTransferStart(int transferID){
+
+        this.nicSpeed_Lock.lock();
+        int order = this.transferID_byOrder.size();
+        this.transferID_byOrder.add(transferID);
+        int auxTransferID;
+
+        switch (order) {
+            case 0:
+                this.nicSpeed_byTransferID.put(transferID, (float) 1);
+                break;
+
+            case 1:
+                auxTransferID = this.transferID_byOrder.get(0);
+                this.nicSpeed_byTransferID.remove(auxTransferID);
+                this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.5);
+
+                this.nicSpeed_byTransferID.put(transferID, (float) 0.5);
+                break;
+
+            case 2:
+                auxTransferID = this.transferID_byOrder.get(0);
+                this.nicSpeed_byTransferID.remove(auxTransferID);
+                this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.45);
+
+                auxTransferID = this.transferID_byOrder.get(1);
+                this.nicSpeed_byTransferID.remove(auxTransferID);
+                this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.45);
+
+                this.nicSpeed_byTransferID.put(transferID, (float) 0.1);
+                break;
+
+            default:
+                float speed = (float) 0.1 / (order - 1);
+
+                for (int i = 2; i < order; i++) {
+                    auxTransferID = this.transferID_byOrder.get(i);
+                    this.nicSpeed_byTransferID.get(auxTransferID);
+                    this.nicSpeed_byTransferID.put(auxTransferID, speed);
+                }
+                this.nicSpeed_byTransferID.put(transferID, speed);
+                break;
+        }
+        this.nicSpeed_Lock.unlock();
+    }
+
+    public void registerTransferEnd(int transferID){
+
+        this.nicSpeed_Lock.lock();
+
+        this.transferID_byOrder.remove((Object)transferID);
+        this.nicSpeed_byTransferID.remove(transferID);
+
+        int numberOfTransfers = this.transferID_byOrder.size();
+        int auxTransferID;
+
+        if(numberOfTransfers != 0) {
+            switch (numberOfTransfers) {
+                case 1:
+                    auxTransferID = this.transferID_byOrder.get(0);
+                    this.nicSpeed_byTransferID.remove(auxTransferID);
+                    this.nicSpeed_byTransferID.put(auxTransferID, (float) 1);
+                    break;
+
+                case 2:
+                    auxTransferID = this.transferID_byOrder.get(0);
+                    this.nicSpeed_byTransferID.remove(auxTransferID);
+                    this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.5);
+
+                    auxTransferID = this.transferID_byOrder.get(1);
+                    this.nicSpeed_byTransferID.remove(auxTransferID);
+                    this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.5);
+                    break;
+                default:
+                    auxTransferID = this.transferID_byOrder.get(0);
+                    this.nicSpeed_byTransferID.remove(auxTransferID);
+                    this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.45);
+
+                    auxTransferID = this.transferID_byOrder.get(1);
+                    this.nicSpeed_byTransferID.remove(auxTransferID);
+                    this.nicSpeed_byTransferID.put(auxTransferID, (float) 0.45);
+
+                    float speed = (float) (0.1 / (numberOfTransfers - 2));
+
+                    for (int i = 2; i < numberOfTransfers; i++) {
+                        auxTransferID = this.transferID_byOrder.get(i);
+                        this.nicSpeed_byTransferID.get(auxTransferID);
+                        this.nicSpeed_byTransferID.put(auxTransferID, speed);
+                    }
+
+                    break;
+            }
+        }
+        this.nicSpeed_Lock.unlock();
+    }
+
+    public int getTransferSpeed(int transferID) {
         int sp;
 
+        this.nicSpeed_Lock.lock();
+        float portion = this.nicSpeed_byTransferID.get(transferID);
+        this.nicSpeed_Lock.unlock();
         this.statsLock.lock();
-        sp = speed;
+        sp = (int) Math.max(this.speed * portion, 1);
         this.statsLock.unlock();
 
         return sp;
+    }*/
+    public void registerTransferSchedule(){
+        this.nicSpeed_Lock.lock();
+        this.scheduledTransfers++;
+        this.nicSpeed_Lock.unlock();
     }
+    public void registerTransferCancel() {
+        this.nicSpeed_Lock.lock();
+        this.scheduledTransfers--;
+        this.nicSpeed_Lock.unlock();
+    }
+    public void registerTransferStart(){
+        this.nicSpeed_Lock.lock();
+        this.scheduledTransfers--;
+        this.activeTransfers++;
+        this.nicSpeed_Lock.unlock();
+    }
+    public void registerTransferEnd() {
+        this.nicSpeed_Lock.lock();
+        this.activeTransfers--;
+        this.nicSpeed_Lock.unlock();
+    }
+
+    public int getActiveTransferSpeed(){
+        int sp = -1;
+
+        this.nicSpeed_Lock.lock();
+        sp = this.speed/this.activeTransfers;
+        this.nicSpeed_Lock.unlock();
+
+        return sp;
+    }
+
+    public int getNewTransferSpeed(){
+        int sp = -1;
+
+        this.nicSpeed_Lock.lock();
+        sp = this.speed/(this.activeTransfers+1);
+        this.nicSpeed_Lock.unlock();
+
+        return sp;
+    }
+
+    public int getNICFirstLinkConnectionSpeed(){
+        int speed;
+
+        this.nicSpeed_Lock.lock();
+        speed = this.speed;
+        this.nicSpeed_Lock.unlock();
+
+        return speed;
+    }
+
 
     public int getMTU() {
         int mtu;
@@ -425,14 +604,14 @@ public class NIC {
         return mtu;
     }
 
-    public ArrayList<InetAddress> getAddresses(){
+/*    public ArrayList<InetAddress> getAddresses(){
 
         this.addresses_Lock.lock();
         ArrayList<InetAddress> ips = new ArrayList<InetAddress>(this.addresses);
         this.addresses_Lock.unlock();
 
         return ips;
-    }
+    }*/
 
     public ArrayList<InetAddress> getLinkLocalAddresses() {
         this.addresses_Lock.lock();

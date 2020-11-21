@@ -1,9 +1,8 @@
 package Network;
 
-import Messages.TransferMetaInfo;
-
 import java.io.IOException;
 import java.net.*;
+import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -11,8 +10,9 @@ public class SchedulerIPListener implements Runnable{
     Scheduler sch;
 
     public NIC nic;
-    public InetAddress ip;
-    public int port;
+    public InetAddress ownIP;
+    public int ownPort;
+    private boolean lockPort;
     public boolean isLinkLocal;
 
     private DatagramSocket ds;
@@ -23,19 +23,25 @@ public class SchedulerIPListener implements Runnable{
     private ReentrantLock connectionLock;
 
 
-    public SchedulerIPListener(Scheduler sch, NIC nic, InetAddress ip){
-        System.out.println("===============================================================>NEW IP LISTENER");
-        this.run = true;
+    public SchedulerIPListener(Scheduler sch, NIC nic, InetAddress ip, boolean isLinkLocal){
+        System.out.println("===============================================================>NEW IP LISTENER " + ip);
+        this.run = false;
         this.isRunning = false;
         this.connectionLock = new ReentrantLock();
 
         this.sch = sch;
 
         this.nic = nic;
-        this.ip = ip;
-        this.isLinkLocal = this.ip.isLinkLocalAddress();
+        this.ownIP = ip;
+        this.ownPort = -1;
+        this.lockPort = false;
 
-        bindDatagramSocket();
+        this.isLinkLocal = isLinkLocal;
+
+    }
+
+    private int getPort(){
+        return this.ownPort;
     }
 
     private void bindDatagramSocket() {
@@ -43,17 +49,25 @@ public class SchedulerIPListener implements Runnable{
         Random rand = new Random();
 
         while (!bound) {
+            //System.out.println("START BIND");
             try {
-                this.port = rand.nextInt(999) + 4000;
+                if(!this.lockPort && this.ownPort == -1) {
+                    this.ownPort = rand.nextInt(999) + 4000;
+                }
                 this.ds = new DatagramSocket(null);
-                InetSocketAddress isa = new InetSocketAddress(this.ip, this.port);
+                InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
                 this.ds.bind(isa);
-                System.out.println("(SECHDULERIPLISTENER) BOUND TO " + this.ip + ":" + this.port);
+                System.out.println("(SECHDULERIPLISTENER) BOUND TO " + this.ownIP + ":" + this.ownPort);
                 this.hasConnection = true;
                 bound = true;
-            } catch (SocketException e) {
-                System.out.println("(SCHEDULERIPLISTENER) ERROR BINDING TO " + this.ip + ":" + this.port);
-                //e.printStackTrace();
+            }
+            catch (SocketException e) {
+                System.out.println("(SCHEDULERIPLISTENER) ERROR BINDING TO " + this.ownIP + ":" + this.ownPort);
+                if(!this.lockPort){
+                    this.ownPort = -1;
+                    this.lockPort = true;
+                }
+                e.printStackTrace();
             }
 
             if(!bound){
@@ -64,49 +78,98 @@ public class SchedulerIPListener implements Runnable{
                 }
             }
         }
+        //System.out.println("            END BIND");
     }
-/*
+
+    public void changeOwnIP(ArrayList<InetAddress> addresses){
+        System.out.println("\t\t\t(SCHEDULERIPLISTENER) CHANGING IP!!");
+
+        //if(!addresses.contains(this.ownIP)){
+            InetAddress newIP = null;
+
+            for (InetAddress address : addresses)
+                if (address.isLinkLocalAddress() == this.isLinkLocal) {
+                    newIP = address;
+                    break;
+                }
+
+            if(newIP != null) {
+
+                this.ownIP = newIP;
+
+                System.out.println("(SCHEDULERIPLISTENER)hasConnection? " + this.hasConnection);
+
+                System.out.println("(SCHEDULERIPLISTENER)GOT NEW IP =>" + this.ownIP + "\nhasConnection? true");
+
+
+                if(this.ds != null && !this.ds.isClosed())
+                    this.ds.close();
+
+                //bindDatagramSocket();
+
+                updateConnectionStatus(true);
+            }
+            else {
+                System.out.println("(SCHEDULERIPLISTENER)NEW IP SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
+                updateConnectionStatus(false);
+            }
+        //}
+/*        else {
+            System.out.println("SAME IP AS BEFORE");
+            if (!this.hasConnection) {
+                System.out.println("    BUT HAD NO CONNECTION (hasConnection => TRUE)");
+                updateConnectionStatus(true);
+            }
+        }*/
+    }
+
     public void updateConnectionStatus(boolean value){
+
         this.connectionLock.lock();
         this.hasConnection = value;
         this.connectionLock.unlock();
 
-        if(value && !this.isRunning){
-            bindDatagramSocket();
-            new Thread(this).start();
+        if(!value && this.ds != null && !this.ds.isClosed()) {
+            this.ownIP = null;
+            this.ds.close();
+            System.out.println("(SCHEDULERIPLISTENER) CLOSED DATAGRASOCKET ON UPDATE CONNECTION STATUS");
         }
-        else{
-            if(!value) {
-                this.ds.close();
-            }
-        }
-    }*/
+    }
 
     public void kill(){
         this.connectionLock.lock();
         this.run = false;
         this.isRunning = false;
-        this.ds.close();
+        if(this.ds != null && this.ds.isClosed())
+            this.ds.close();
         this.connectionLock.unlock();
     }
 
+    public void reactivate(){
+        //System.out.println("(SCHEDULERIPLISTENER) REACTIVATE");
+        this.run = true;
+        if(this.ds == null || this.ds.isClosed())
+            bindDatagramSocket();
+        new Thread(this).start();
+    }
+
     public void sendDP(DatagramPacket dp){
-        try {
-            if(this.ds != null && !this.ds.isClosed()) {
-                this.ds.send(dp);
-                System.out.println("SENT DP THROUGH " + this.ip + ":" + this.port);
+        if(this.hasConnection) {
+            try {
+                if (this.ds != null && !this.ds.isClosed()) {
+                    this.ds.send(dp);
+                    System.out.println("SENT DP THROUGH " + this.ownIP + ":" + this.ownPort);
+                } else
+                    System.out.println("=====================================================>>>>> (SCHIPLISTENER) ERROR SENDING DP");
+            } catch (IOException e) {
+                System.out.println("IP " + this.ownIP);
+                e.printStackTrace();
             }
-            else
-                System.out.println("=====================================================>>>>> (SCHIPLISTENER) ERROR SENDING DP");
-        }
-        catch (IOException e) {
-            System.out.println("IP " + this.ip);
-            e.printStackTrace();
         }
     }
 
     public void run() {
-
+        System.out.println("NEW THREAD RUNNING SCHEDULERIPLISTENER");
         this.isRunning = true;
         int MTU;
         int tries = 0;
@@ -132,8 +195,8 @@ public class SchedulerIPListener implements Runnable{
             this.connectionLock.unlock();
             try {
                 this.ds.receive(dp);
-                System.out.println("(SCHEDULERIPLISTENER) RECEIVED SOMETHING FROM " + dp.getAddress());
-                sch.processReceivedDP(dp, this.nic, this.ip, this.port);
+                System.out.println("(SCHEDULERIPLISTENER) RECEIVED SOMETHING FROM " + dp.getAddress() + " " +dp.getData().length);
+                sch.processReceivedDP(dp, this.nic, this.ownIP, this.ownPort);
 
                 buf = new byte[MTU];
                 dp = new DatagramPacket(buf, buf.length);
@@ -150,6 +213,6 @@ public class SchedulerIPListener implements Runnable{
         this.connectionLock.unlock();
         this.isRunning = false;
 
-        System.out.println("SCHEDULERIPLISTENER (" + this.ip + ":" + this.port + ")DEAD");
+        System.out.println("SCHEDULERIPLISTENER (" + this.ownIP + ":" + this.ownPort + ")DEAD");
     }
 }

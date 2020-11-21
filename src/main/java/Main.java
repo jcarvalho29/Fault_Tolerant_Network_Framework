@@ -17,12 +17,9 @@ import java.io.File;
 public class Main{
 
 
-    public static void main(String args[]){
-        Random rand = new Random();
-
+    public static void main(String args[]) throws InterruptedException {
         String ftnfpath = createFTNFFolderStructure();
 
-        //out.println(path);
         DataManager dm = new DataManager(ftnfpath, true);
        System.out.println("CREATED DATAMANAGER");
 
@@ -31,7 +28,7 @@ public class Main{
 
         ArrayList<NIC> nics = new ArrayList<NIC>();
         getNICs(nics, sc);
-
+        Thread.sleep(1000);
         for(NIC nic : nics)
             sc.registerNIC(nic);
 
@@ -43,15 +40,16 @@ public class Main{
 
         //MENU
         sb.append("=================================\n")
-                .append("0 - LOAD DOCUMENT jar\n")
-                .append("1 - LOAD DOCUMENT 100MB.zip\n")
-                .append("2 - LOAD DOCUMENT 512MB.zip\n")
-                .append("3 - LOAD MESSAGE\n")
-                .append("4 - START LISTENER\n")
-                .append("5 - SEND LOADED INFO\n")
-                .append("6 - START KNOCK MANAGER\n")
-                .append("7 - MOUNT DOC\n")
-                .append("8 - PRINT SCHEDULE\n")
+                .append("1 - LOAD DOCUMENT jar\n")
+                .append("2 - LOAD DOCUMENT 100MB.zip\n")
+                .append("3 - LOAD DOCUMENT 512MB.zip\n")
+                .append("4 - LOAD MESSAGE\n")
+                .append("5 - START LISTENER\n")
+                .append("6 - SEND LOADED INFO\n")
+                .append("7 - START KNOCK MANAGER\n")
+                .append("8 - SEND KNOCK\n")
+                .append("9 - MOUNT DOC\n")
+                .append("0 - PRINT SCHEDULE\n")
                 .append("=================================");
 
         while(true) {
@@ -63,52 +61,52 @@ public class Main{
 
 
                 switch (Integer.parseInt(option)) {
-                    case 0: {
+                    case 1: {
                         createDocument(dm, 1300, "Fault_Tolerant_Network_Framework/target/Fault_Tolerant_Network_Framework-1.0-SNAPSHOT.jar");
                         break;
                     }
-                    case 1: {
+                    case 2: {
                         createDocument(dm, 1300, "100MB.zip");
                         break;
                     }
-                    case 2: {
+                    case 3: {
                         createDocument(dm, 1300, "512MB.zip");
                         break;
                     }
 
-                    case 3: {
+                    case 4: {
                         createMessage(dm, 1300);
                         break;
                     }
 
-                    case 4: {
+                    case 5: {
                         startMainListener(dm, nics,3333);
                         break;
                     }
 
-                    case 5: {
+                    case 6: {
                         sendLoadedInfo(sc, dm, 3333);
                         break;
                     }
 
-                    case 6:{
+                    case 7:{
                         km = startKnockManager(nics);
                         break;
                     }
 
-                    case 7:{
+                    case 8:{
                         if(km != null) {
-                            System.out.println("MAIN" + km.searchForTimePeriod(2));
+                            System.out.println("MAIN" + km.searchForTimePeriod(10));
                         }
                         break;
                     }
 
-                    case 8:{
+                    case 9:{
                         mountFile(dm);
                         break;
                     }
 
-                    case 9:{
+                    case 0:{
                         sc.printSchedule();
                         break;
                     }
@@ -133,7 +131,7 @@ public class Main{
             nicNames = nicFolder.list();
             if(nicNames != null) {
                 for (String nicName : nicNames)
-                    if (!nicName.equals("lo")) {
+                    if (!nicName.equals("lo") && !nicName.equals("enp2s0")) {
                         wirelessFolder = new File(nicPath + nicName + wirelessPath);
                         if (wirelessFolder.exists() && wirelessFolder.isDirectory())
                             nics.add(new NIC(nicName, true, sc));
@@ -153,8 +151,8 @@ public class Main{
             nic = nics.get(i);
             System.out.println(i + ") " + nic.name);
             System.out.println("\tisWireless? " + nic.isWireless);
-            System.out.println("\tSpeed " + nic.getSpeed()/1000 + " Mb/s");
-            System.out.println("\tMTU " + nic.getMTU() + " Bytes");
+/*            System.out.println("\tSpeed " + nic.getSpeed()/1000 + " Mb/s");
+            System.out.println("\tMTU " + nic.getMTU() + " Bytes");*/
             System.out.println("\tAddresses " + nic.addresses);
         }
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -181,12 +179,11 @@ public class Main{
             e.printStackTrace();
         }
 
-        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, nic, isLocalLink, unicastPort, 50);
+        ListenerMainUnicast mainListener = new ListenerMainUnicast(dm, nic, isLocalLink, unicastPort);
         nic.registerLMUListener(mainListener);
     }
 
     private static void sendLoadedInfo(Scheduler sc, DataManager dm, int destPort){
-//        private static void startSender(Scheduler sc, String infoHash, int destPort, int unicastPort, int mtu, ArrayList<NIC> nics, ChunkManager cm, ChunkManagerMetaInfo cmmi, String docName){
 
         StringBuilder sb = new StringBuilder();
         int i = 1;
@@ -229,7 +226,7 @@ public class Main{
 
         String infoHash = "";
 
-        if(choice > 0 && choice < hashs.size()){
+        if(choice > 0 && choice <= hashs.size()){
             infoHash = hashs.get(choice-1);
 
             System.out.println("GIVE ME A IP TO SEND");
@@ -258,8 +255,8 @@ public class Main{
             nic = nics.get(i);
             System.out.println(i + ") " + nic.name);
             System.out.println("\tisWireless? " + nic.isWireless);
-            System.out.println("\tSpeed " + nic.getSpeed()/1000 + " Mb/s");
-            System.out.println("\tMTU " + nic.getMTU() + " Bytes");
+/*            System.out.println("\tSpeed " + nic.getSpeed()/1000 + " Mb/s");
+            System.out.println("\tMTU " + nic.getMTU() + " Bytes");*/
             System.out.println("\tAddresses " + nic.addresses);
         }
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -277,7 +274,7 @@ public class Main{
 
         KnockManager km = null;
         try {
-            km = new KnockManager(nic, InetAddress.getByName("FF02:0:0:0:0:0:0:3"),6100,null);
+            km = new KnockManager(nic, InetAddress.getByName("233.252.18.250"),6100,null);
         }
         catch (UnknownHostException e) {
             e.printStackTrace();
@@ -321,7 +318,6 @@ public class Main{
                 new BufferedReader(new InputStreamReader(System.in));
         String choice = "";
         int i = 0;
-        InetAddress destIP = null;
         try {
             choice = reader.readLine();
             i = Integer.parseInt(choice) - 1;

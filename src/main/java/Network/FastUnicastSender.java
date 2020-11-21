@@ -150,7 +150,7 @@ public class FastUnicastSender implements Runnable{
                 bound = true;
                 this.ds.setSendBufferSize(3000000);
                 System.out.println("(FASTUNICASTSENDER) BOUND TO " + this.ownIP + ":" + this.ownPort);
-                changeHasConnection(true);
+                //changeHasConnection(true);
                 this.packetLock.unlock();
 
             } catch (SocketException e) {
@@ -169,12 +169,12 @@ public class FastUnicastSender implements Runnable{
     }
 
     public void changeHasConnection(boolean value){
-        this.hasConnection = value;
-        if(this.hasConnection && !this.isRunning){
-            Thread t = new Thread(this);
-            t.start();
+        if(!this.hasConnection && value && !this.isRunning) {
+            new Thread(this).start();
         }
-        System.out.println("\t\t\tCHANGED FASTSENDER HASCONNECTION TO " + value);
+        this.hasConnection = value;
+        //System.out.println("\t\t\tCHANGED FASTSENDER HASCONNECTION TO " + value);
+
     }
 
     public void run() {
@@ -378,7 +378,7 @@ public class FastUnicastSender implements Runnable{
             }
         this.isRunning = false;
         this.isRunning_lock.unlock();
-        System.out.println("FAST SENDER DEAD");
+        System.out.println("FAST SENDER DEAD hasConnection? " + hasConnection + " run? " + run);
 
         System.out.println("\t( CHUNKARRAYS SIZE " + this.chunkArrays.size() + " )");
         System.out.println("\t( CHUNKIDSARRAY SIZE " + this.chunkIDsArray.size() + " )");

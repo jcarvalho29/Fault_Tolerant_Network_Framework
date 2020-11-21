@@ -16,8 +16,10 @@ public class FastUnicastListener implements Runnable {
     private int MTU;
     private int dps;
 
-    private ArrayList<DatagramPacket[]> Overflow;
-    private DatagramPacket[] datagramPacketsArray;
+    //private ArrayList<DatagramPacket[]> Overflow;
+    private ArrayList<byte[][]> Overflow;
+    //private DatagramPacket[] datagramPacketsArray;
+    private byte[][] datagramPacketsArray;
     private int datagramPacketsArraySize;
     private int pointer;
     private int receivedCM;
@@ -41,10 +43,12 @@ public class FastUnicastListener implements Runnable {
 
         this.arrayLock = new ReentrantLock();
 
-        this.Overflow = new ArrayList<DatagramPacket[]>();
+        //this.Overflow = new ArrayList<DatagramPacket[]>();
+        this.Overflow = new ArrayList<byte[][]>();
         //0.55 = 1.1 (10% maior) * 0.5 (primeiro sleep é de 0.5 segundos)
         this.datagramPacketsArraySize = (int) (this.dps* 0.55);
-        this.datagramPacketsArray = new DatagramPacket[this.datagramPacketsArraySize];
+        //this.datagramPacketsArray = new DatagramPacket[this.datagramPacketsArraySize];
+        this.datagramPacketsArray = new byte[this.datagramPacketsArraySize][];
         this.pointer = 0;
         this.receivedCM = 0;
 
@@ -106,12 +110,13 @@ public class FastUnicastListener implements Runnable {
 
     public void run() {
 
-            byte[] buffer;
-        DatagramPacket dp;
+        byte[] buffer = new byte[this.MTU];
+        DatagramPacket dp = new DatagramPacket(buffer, this.MTU);
         while (this.run){
             try{
                 buffer = new byte[this.MTU];
-                dp = new DatagramPacket(buffer, this.MTU);
+                //dp = new DatagramPacket(buffer, this.MTU);
+                dp.setData(buffer);
 
                 this.ds.receive(dp);
 
@@ -123,7 +128,13 @@ public class FastUnicastListener implements Runnable {
                 this.arrayLock.lock();
                 if(this.pointer == this.datagramPacketsArraySize){
 
-                    DatagramPacket[] copy = new DatagramPacket[this.datagramPacketsArraySize];
+                    /*DatagramPacket[] copy = new DatagramPacket[this.datagramPacketsArraySize];
+                    System.arraycopy(this.datagramPacketsArray, 0, copy, 0, this.datagramPacketsArraySize);
+                    this.Overflow.add(copy);
+                    copy = null;*/
+
+
+                    byte[][] copy = new byte[this.datagramPacketsArraySize][];
                     System.arraycopy(this.datagramPacketsArray, 0, copy, 0, this.datagramPacketsArraySize);
                     this.Overflow.add(copy);
                     copy = null;
@@ -131,7 +142,8 @@ public class FastUnicastListener implements Runnable {
                     this.pointer = 0;
                 }
 
-                this.datagramPacketsArray[this.pointer] = dp;
+                //this.datagramPacketsArray[this.pointer] = dp;
+                this.datagramPacketsArray[this.pointer] = dp.getData();
                 this.pointer++;
                 this.receivedCM++;
 
@@ -155,18 +167,21 @@ public class FastUnicastListener implements Runnable {
     }
 
     public ChunkMessage[] getChunkMessages() {
-        ArrayList<DatagramPacket[]> overflowCopy = null;
+        //ArrayList<DatagramPacket[]> overflowCopy = null;
+        ArrayList<byte[][]> overflowCopy = null;
         int receivedCMCopy;
 
         this.arrayLock.lock();
         receivedCMCopy = this.receivedCM;
         this.receivedCM = 0;
 
-        DatagramPacket[] objects = new DatagramPacket[receivedCMCopy];
+        //DatagramPacket[] objects = new DatagramPacket[receivedCMCopy];
+        byte[][] objects = new byte[receivedCMCopy][];
         int cmInObjectsArrayCopy = 0;
 
         if(this.Overflow.size() > 0) {
-            overflowCopy = new ArrayList<DatagramPacket[]>(this.Overflow);
+            //overflowCopy = new ArrayList<DatagramPacket[]>(this.Overflow);
+            overflowCopy = new ArrayList<byte[][]>(this.Overflow);
             this.Overflow.clear();
         }
 
@@ -180,7 +195,8 @@ public class FastUnicastListener implements Runnable {
 
 
         if(overflowCopy != null) {
-            for (DatagramPacket[] b : overflowCopy) {
+            //for (DatagramPacket[] b : overflowCopy) {
+            for (byte[][] b : overflowCopy) {
                 System.arraycopy(b, 0, objects, cmInObjectsArrayCopy, b.length);
                 cmInObjectsArrayCopy += b.length;
             }
@@ -188,42 +204,10 @@ public class FastUnicastListener implements Runnable {
 
         ChunkMessage[] cms = new ChunkMessage[objects.length];
 
-/*        InetAddress[] addresses = new InetAddress[Math.min(10,objects.length)];
-        int addressesPointer = 0;
-
-        for (int i = Math.min(0, objects.length - 10); i < objects.length; i++){
-            addresses[addressesPointer] = objects[i].getAddress();
-            addressesPointer++;
-        }*/
-
         for(int i = 0; i < objects.length; i++){
-            cms[i] = (ChunkMessage) getObjectFromBytes(objects[i].getData());
+            //cms[i] = (ChunkMessage) getObjectFromBytes(objects[i].getData());
+            cms[i] = (ChunkMessage) getObjectFromBytes(objects[i]);
         }
-
-/*        ArrayList<InetAddress> addressesIndex = new ArrayList<InetAddress>();
-        int[] count = new int[10];
-
-        for(addressesPointer = 0; addressesPointer < addresses.length; addressesPointer++){
-            count[addressesPointer] = 0;
-
-            if(!addressesIndex.contains(addresses[addressesPointer]))
-                addressesIndex.add(addresses[addressesPointer]);
-
-            count[addressesIndex.indexOf(addresses[addressesPointer])]++;
-        }
-
-        int max = 0;
-        int index = 0;
-
-        for(int i = 0; i < count.length; i++){
-            if(count[i] > max){
-                max = count[i];
-                index = i;
-            }
-        }
-
-        this.perceivedTransmitterIP = addressesIndex.get(index);
-*/
         return cms;
     }
 
@@ -231,9 +215,9 @@ public class FastUnicastListener implements Runnable {
         //500 = 2/1000
         rtt = Math.min(rtt, 5000);
         int newDatagramPacketsArraySize = ((dps * rtt) / 500); // EXCEPTION!!!!!!!
-        DatagramPacket[] tmp = null;
+        byte[][] tmp = null;
         try {
-            tmp = new DatagramPacket[newDatagramPacketsArraySize];
+            tmp = new byte[newDatagramPacketsArraySize][];
         }
         catch (Exception e){
             e.printStackTrace();
@@ -242,7 +226,8 @@ public class FastUnicastListener implements Runnable {
         this.arrayLock.lock();
 
         if (this.pointer != 0) {
-            DatagramPacket[] datagramPacketsArrayCopy = new DatagramPacket[this.pointer];
+            //DatagramPacket[] datagramPacketsArrayCopy = new DatagramPacket[this.pointer];
+            byte[][] datagramPacketsArrayCopy = new byte[this.pointer][];
 
             System.arraycopy(this.datagramPacketsArray, 0, datagramPacketsArrayCopy, 0, this.pointer);
 

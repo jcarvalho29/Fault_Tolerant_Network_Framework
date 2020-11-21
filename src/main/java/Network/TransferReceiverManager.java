@@ -17,7 +17,7 @@ public class TransferReceiverManager implements Runnable{
     private TransferMetaInfo tmi;
     private ReceiverStats stats;
 
-    private InetAddress destIP;
+    public InetAddress destIP;
     private int destPort;
     private ReentrantLock destIPLock;
 
@@ -45,13 +45,13 @@ public class TransferReceiverManager implements Runnable{
     private boolean hasUpdatedCycleStats;
     private boolean run = true;
 
-    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress ownIP, InetAddress destIP, int destPort, NIC nic, TransferMetaInfo tmi, int numberOfListeners){
+    public TransferReceiverManager(ListenerMainUnicast ml, DataManager dm, InetAddress ownIP, InetAddress destIP, int destPort, NIC nic, TransferMetaInfo tmi){
 
         this.mainListener = ml;
         this.dm = dm;
 
         this.nic = nic;
-        this.stats = new ReceiverStats(this.nic, tmi.firstLinkSpeed, tmi.isWireless, numberOfListeners, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
+        this.stats = new ReceiverStats(this.nic, tmi.firstLinkSpeed, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
 
         this.destIP = destIP;
         this.destPort = destPort;
@@ -59,7 +59,7 @@ public class TransferReceiverManager implements Runnable{
 
         this.tmi = tmi;
 
-        this.numberOfListeners = numberOfListeners;
+        this.numberOfListeners = this.stats.getNumberOfListeners();
 
         this.receivedDPDuringCycle = 0;
         this.fastListeners = new ArrayList<FastUnicastListener>();
@@ -128,15 +128,27 @@ public class TransferReceiverManager implements Runnable{
         this.hasConnection = value;
     }
 
-    public void changeIP(InetAddress newIP){
-        this.hasConnection = false;
+    public void sendNetworkStatusUpdate(InetAddress newIP, int dps, boolean calculateDPS){
         this.unicastSocket.close();
         this.ownIP = newIP;
         bindDatagramSocket();
 
         //enviar multiplos ipchanges ao transmissor para que este saiba que mudei de IP
-        IPChange ipc = new IPChange(this.tmi.transferID, newIP);
-        byte[] serializedIPC = getBytesFromObject(ipc);
+
+        if(calculateDPS){
+            int avgRTT = this.stats.getAverageRTT();
+            dps = this.stats.getDPS();
+            int newDPS = this.stats.calculateDPS();
+
+            if(dps != newDPS) {
+                for (FastUnicastListener ful : this.fastListeners)
+                    ful.changeDatagramPacketsArraySize(avgRTT, newDPS);
+                dps = newDPS;
+            }
+        }
+
+        NetworkStatusUpdate nsu = new NetworkStatusUpdate(this.tmi.transferID, dps, newIP);
+        byte[] serializedIPC = getBytesFromObject(nsu);
 
         this.destIPLock.lock();
         DatagramPacket packet = new DatagramPacket(serializedIPC, serializedIPC.length, this.destIP, this.destPort);
@@ -168,19 +180,33 @@ public class TransferReceiverManager implements Runnable{
         this.destIPLock.unlock();
     }
 
+    public void changeConnectionSpeed(int senderConnectionSpeed){
+        this.stats.updateSenderConnectionSpeed(senderConnectionSpeed);
+
+        int avgRTT = this.stats.getAverageRTT();
+        int dps = this.stats.getDPS();
+        int newDPS = this.stats.calculateDPS();
+
+        if(dps != newDPS) {
+            for (FastUnicastListener ful : this.fastListeners)
+                ful.changeDatagramPacketsArraySize(avgRTT, newDPS);
+            dps = newDPS;
+            sendNetworkStatusUpdate(this.ownIP, dps, false);
+        }
+    }
+
     private void createFastListeners(){
-        FastUnicastListener fus;
+        FastUnicastListener ful;
 
         for(int i = 0; i < numberOfListeners; i++){
 
-            fus = new FastUnicastListener(this.nic.getMTU(), this.stats.getDPS());
+            ful = new FastUnicastListener(this.nic.getMTU(), this.stats.getDPS());
             //System.out.println("CREATED FASUNICAST WITH DPS AT " + this.stats.getDPS());
-            Thread t = new Thread(fus);
+            Thread t = new Thread(ful);
 
             t.start();
-            this.fastListeners.add(fus);
-            this.fastListenersPorts.add(fus.port);
-            //System.out.println("PORT " + fus.port);
+            this.fastListeners.add(ful);
+            this.fastListenersPorts.add(ful.port);
         }
     }
 
@@ -310,9 +336,13 @@ public class TransferReceiverManager implements Runnable{
             this.stats.markFirstRetransmittedCMReceivedTime(min);
 
             int avgRTT = this.stats.getAverageRTT();
-            int dps = this.stats.getDPS();
-            for(FastUnicastListener ful: this.fastListeners)
-                ful.changeDatagramPacketsArraySize(avgRTT, dps);
+            int currentDPS = this.stats.getDPS();
+            int newDPS = this.stats.calculateDPS();
+
+            if(newDPS != currentDPS) {
+                for (FastUnicastListener ful : this.fastListeners)
+                    ful.changeDatagramPacketsArraySize(avgRTT, newDPS);
+            }
         }
         else{
             for(FastUnicastListener fus : this.fastListeners)
@@ -331,8 +361,6 @@ public class TransferReceiverManager implements Runnable{
             this.stats.registerDPExpectedInCycle(this.dm.documents.get(this.tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
             //System.out.println("Registered the expected CM for the next cycle");
         }
-
-        this.stats.calculateDPS();
 
         this.stats.markTransferCycleEnding();
         this.stats.markTransferCycleBeginning();
@@ -384,6 +412,9 @@ public class TransferReceiverManager implements Runnable{
     }
 
     private void sendOver(boolean wasInterrupted) {
+
+        //CHANGE
+        this.nic.registerTransferEnd();
 
         Over over = new Over(this.tmi.transferID, wasInterrupted);
 
@@ -499,15 +530,15 @@ public class TransferReceiverManager implements Runnable{
                 break;
             }
             case 2: {
-                sleepTime *= 4;
+                sleepTime *= 3;
                 break;
             }
             case 3: {
-                sleepTime *= 8;
+                sleepTime *= 4;
                 break;
             }
             default: {
-                sleepTime *= (8 + this.consecutiveTimeouts%10);
+                sleepTime *= (5 + this.consecutiveTimeouts%10);
                 break;
             }
         }
@@ -517,7 +548,7 @@ public class TransferReceiverManager implements Runnable{
             System.out.println("        NO CONNECTION sleeptime*10 " + sleepTime);
         }*/
 
-        sleepTime = Math.min(sleepTime, 10000);
+        sleepTime = Math.min(sleepTime, 5000);
 
         return sleepTime;
     }

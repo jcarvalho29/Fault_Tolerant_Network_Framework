@@ -743,7 +743,7 @@ public class ChunkManager {
                             nmc++;
                 }
                 actualMaxSize = maxSize(res);
-
+                System.out.println("ACTUAL SIZE " + actualMaxSize + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
 
                 if(actualMaxSize > maxSize) {
                     sizeParam = (int) (sizeParam * 0.95);

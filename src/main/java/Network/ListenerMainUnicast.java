@@ -1,7 +1,7 @@
 package Network;
 
 import Data.DataManager;
-import Messages.IPChange;
+import Messages.NetworkStatusUpdate;
 import Messages.TransferMetaInfo;
 
 import java.io.*;
@@ -20,8 +20,6 @@ public class ListenerMainUnicast implements Runnable{
     private int unicastPort;
     private boolean hasConnection;
 
-    private int NICCapacity;
-
     private HashMap<Integer, TransferReceiverManager> infoReceiverManager;
 
 
@@ -29,7 +27,7 @@ public class ListenerMainUnicast implements Runnable{
 
     private ArrayList<Integer> receivedIDs;
 
-    public ListenerMainUnicast(DataManager dm, NIC nic, boolean isLocalLink, int unicastPort, int NICCapacity){
+    public ListenerMainUnicast(DataManager dm, NIC nic, boolean isLocalLink, int unicastPort){
 
         this.dm = dm;
         this.nic = nic;
@@ -37,9 +35,6 @@ public class ListenerMainUnicast implements Runnable{
         this.currentIP = null;
         this.unicastPort = unicastPort;
         this.hasConnection = false;
-
-
-        this.NICCapacity = NICCapacity;
 
         this.infoReceiverManager = new HashMap<Integer, TransferReceiverManager>();
         this.receivedIDs = new ArrayList<Integer>();
@@ -103,8 +98,11 @@ public class ListenerMainUnicast implements Runnable{
 
                 System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + "\nhasConnection? " + this.hasConnection);
 
+                updateConnectionStatus(true);
+
                 for (TransferReceiverManager trm : this.infoReceiverManager.values())
-                    trm.changeIP(this.currentIP);
+                    trm.sendNetworkStatusUpdate(this.currentIP, 0, true);
+
             }
             else {
                 System.out.println("NEW ADDRESSES SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
@@ -179,8 +177,8 @@ public class ListenerMainUnicast implements Runnable{
                         this.dm.newMessage(tmi.cmmi.Hash, tmi.cmmi.datagramMaxSize, tmi.cmmi.numberOfChunks);
                 }
 
-
-                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, this.currentIP, dp.getAddress(), dp.getPort(), this.nic, tmi, 1);
+                this.nic.registerTransferStart();
+                TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, this.currentIP, dp.getAddress(), dp.getPort(), this.nic, tmi);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
                 this.infoReceiverManager.put(tmi.transferID, trm);
@@ -191,14 +189,19 @@ public class ListenerMainUnicast implements Runnable{
             }
         }
         else{
-            if(obj instanceof IPChange){
-                IPChange ipc = (IPChange) obj;
+            if(obj instanceof NetworkStatusUpdate){
+                NetworkStatusUpdate nsu = (NetworkStatusUpdate) obj;
 
-                if(this.receivedIDs.contains(ipc.transferID)){
-                    TransferReceiverManager trm = this.infoReceiverManager.get(ipc.transferID);
+                if(this.receivedIDs.contains(nsu.transferID)){
+                    TransferReceiverManager trm = this.infoReceiverManager.get(nsu.transferID);
 
-                    trm.changeDestIP(ipc.newIP);
-                    System.out.println("SENDER CHANGED IP");
+                    if(!trm.destIP.equals(nsu.newIP)) {
+                        trm.changeDestIP(nsu.newIP);
+                        System.out.println("SENDER CHANGED IP");
+                    }
+
+                    trm.changeConnectionSpeed(nsu.firstLinkSpeed);
+                    System.out.println("SENDER UPDATED DPS");
                 }
             }
         }

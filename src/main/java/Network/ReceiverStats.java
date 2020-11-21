@@ -6,7 +6,7 @@ import java.util.Date;
 public class ReceiverStats {
 
     private  NIC nic;
-    private int senderLinkSpeed;
+    private int senderConnectionSpeed;
     private boolean isSenderConnectionWireless;
     private int numberOfListeners;
     private long numberOfMissingChunks;
@@ -56,13 +56,12 @@ public class ReceiverStats {
 
     public ArrayList<Integer> dpsPerCycle;
 
-    public ReceiverStats(NIC nic, int senderLinkSpeed, boolean isSenderConnectionWireless, int numberOfListeners, int numberOfMissingChunks){
+    public ReceiverStats(NIC nic, int senderConnectionSpeed, int numberOfMissingChunks){
 
         this.nic = nic;
-        this.senderLinkSpeed = senderLinkSpeed;
-        this.isSenderConnectionWireless = isSenderConnectionWireless;
+        this.senderConnectionSpeed = senderConnectionSpeed;
+        //this.isSenderConnectionWireless = isSenderConnectionWireless;
 
-        this.numberOfListeners = numberOfListeners;
         this.numberOfMissingChunks = numberOfMissingChunks;
 
         this.averageDPSize = this.nic.getMTU() - 100;
@@ -93,8 +92,8 @@ public class ReceiverStats {
         this.retransmissionRTT = new ArrayList<Integer>();
 
         this.dpsPerCycle = new ArrayList<Integer>();
-        calculateDPS();
 
+        registerNewDPS(calculateDPS());
     }
 
     public void markProtocolStartTime(){
@@ -261,72 +260,87 @@ public class ReceiverStats {
         return this.transferCycleStartTime.size();
     }
 
-    public void calculateDPS(){
-        int nicSpeed;
+    public int calculateDPS(){
+        int nicSpeed = this.nic.getActiveTransferSpeed();
 
-        if(this.nic.isWireless)
-            nicSpeed = this.nic.getSpeed()/1000; //CHANGE??
-        else
-            nicSpeed = this.nic.getSpeed();
-
-        int limiterLinkSpeed = Math.min(nicSpeed, this.senderLinkSpeed);
+        int limiterLinkSpeed = Math.min(nicSpeed, senderConnectionSpeed);
         System.out.println("NIC SPEED " + nicSpeed);
-        System.out.println("SENDER SPEED " + this.senderLinkSpeed);
-
-        if(this.isSenderConnectionWireless || this.nic.isWireless) {
-            limiterLinkSpeed *= .75;
-            System.out.println("LIMITED SPEED DUE TO WIRELESS CONNECTION");
-        }
-        else
-            System.out.println("BOTH CONNECTIONS ARE WIRED ONES");
-
-        if(limiterLinkSpeed == 0)
-            limiterLinkSpeed = 1;
+        System.out.println("SENDER SPEED " + senderConnectionSpeed);
 
         int capacityInDPS = ((limiterLinkSpeed*1000000)/(this.averageDPSize*8));
 
-        float dpsLimiterMultiplier = 1;
-
-        if(this.numberOfMissingChunks/capacityInDPS > 20) {
-            System.out.println("                    Multipliquei por 0.80");
-            dpsLimiterMultiplier *= .80;
+        if(this.dpsPerCycle.isEmpty()) {
+            this.numberOfListeners = (int) Math.round(((float)capacityInDPS/6000) + 0.5);
+            System.out.println("capacityDPS/ 10000 ( " + capacityInDPS + " / 10000) = " + this.numberOfListeners);
         }
 
-        int maxDPSPerListener = (int)(Math.max(Math.min(capacityInDPS/this.numberOfListeners, 5000), 10) * dpsLimiterMultiplier);
+        int maxDPSPerListener = (Math.max(capacityInDPS/this.numberOfListeners, 10));
+        System.out.println("capacityDPS / numberOfListeners " + capacityInDPS + " / " + this.numberOfListeners + " = " + (capacityInDPS/this.numberOfListeners));
         //CHANGE aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
 
-        int currentDPS = this.dpsPerCycle.get(this.dpsPerCycle.size()-1);
-        float currentDropRate = this.drops_PerTransferCycle.get(this.drops_PerTransferCycle.size()-1);
+        if(!this.dpsPerCycle.isEmpty()) {
+            float currentDropRate = this.drops_PerTransferCycle.get(this.drops_PerTransferCycle.size() - 1);
 
-        int lowerLimit = (int)(currentDPS - (currentDPS*.1));
-        int upperLimit = (int)(currentDPS + (currentDPS*.1));
+            if (currentDropRate > 0.1 && currentDropRate < 0.2)
+                currentDropRate = (float) 0.1;
+            else
+                if (currentDropRate > 0.2)
+                    currentDropRate /= 2;
+                else
+                    currentDropRate = 0;
 
-        if(currentDropRate > 0.1 && currentDropRate < 0.2){
-            currentDropRate = (float)0.1;
+            maxDPSPerListener = (int) Math.max(maxDPSPerListener * (1 - currentDropRate), 10);
+
+            /*
+            int lowerLimit = (int) (currentDPS - (currentDPS * .1));
+            int upperLimit = (int) (currentDPS + (currentDPS * .1));
+
+            if (maxDPSPerListener >= lowerLimit && maxDPSPerListener <= upperLimit) {
+                maxDPSPerListener = Math.max((int) (maxDPSPerListener * (1 - currentDropRate)), 10);
+            }
+            else {
+                if (maxDPSPerListener < lowerLimit)
+                    maxDPSPerListener = Math.max((int) (maxDPSPerListener * 1.05), 10);
+                else
+                    maxDPSPerListener = Math.max((int) (maxDPSPerListener * (currentDropRate * 2)), 10);
+            }*/
+        }
+        if(!this.dpsPerCycle.isEmpty()) {
+            int currentDPS = this.dpsPerCycle.get(this.dpsPerCycle.size() - 1);
+
+            if ((maxDPSPerListener < currentDPS * 0.9 || maxDPSPerListener > currentDPS * 1.1) && maxDPSPerListener - currentDPS > 800) {
+            }
+            else {
+                maxDPSPerListener = currentDPS;
+            }
+            registerNewDPS(maxDPSPerListener);
         }
         else
-            if(currentDropRate > 0.2)
-                currentDropRate /= 2;
+            registerNewDPS(maxDPSPerListener);
 
-        if(maxDPSPerListener >= lowerLimit && maxDPSPerListener <= upperLimit)
-            maxDPSPerListener = Math.max((int)(maxDPSPerListener * currentDropRate), 10);
-        else
-            if(maxDPSPerListener < lowerLimit)
-                maxDPSPerListener = Math.max((int)(maxDPSPerListener * (currentDropRate * 0.5)), 10);
-            else
-                maxDPSPerListener = Math.max((int)(maxDPSPerListener * (currentDropRate * 2)), 10);
 
-        System.out.println("DPS/LISTENER " + maxDPSPerListener);
-
-        this.dpsPerCycle.add(maxDPSPerListener);
-
+        return maxDPSPerListener;
     }
 
     public int getDPS(){
         return this.dpsPerCycle.get(this.dpsPerCycle.size()-1);
     }
+
+    private void registerNewDPS(int newDPS){
+        this.dpsPerCycle.add(newDPS);
+        System.out.println("DPS/LISTENER " + newDPS);
+    }
+
+    public int getNumberOfListeners() {
+        return this.numberOfListeners;
+    }
+
     private void updateMissingChunks(long receivedChunks){
         this.numberOfMissingChunks -= receivedChunks;
+    }
+
+    public void updateSenderConnectionSpeed(int senderConnectionSpeed){
+        this.senderConnectionSpeed = senderConnectionSpeed;
     }
     public void printStats(){
         System.out.println("Drop % => " + dropPercentage() + "%");
@@ -338,6 +352,15 @@ public class ReceiverStats {
         System.out.println("Transfer Speed => " + bytesPerSecondTransfer()/1024 + " KB/s");
 
         System.out.println("Drops per Transfer Cycle:");
+
+        System.out.println(this.transferCycleStartTime.size());
+        System.out.println(this.transferCyclesDuration.size());
+        System.out.println(this.transferCycleEndTime.size());
+        System.out.println(this.dpReceived_PerTransferCycle.size());
+        System.out.println(this.dpExpected_PerTransferCycle.size());
+        System.out.println(this.drops_PerTransferCycle.size());
+        System.out.println(this.dpsPerCycle.size());
+
 
         for(int i = 0; i < this.transferCycleEndTime.size(); i++){
             System.out.println("    Cycle " + i + ")\n      Duration => " + this.transferCyclesDuration.get(i) + " ms \n        Chunks Received => " + this.dpReceived_PerTransferCycle.get(i) + " / " + this.dpExpected_PerTransferCycle.get(i) + "( " + this.drops_PerTransferCycle.get(i) + " %)\n       DPS => " + this.dpsPerCycle.get(i));

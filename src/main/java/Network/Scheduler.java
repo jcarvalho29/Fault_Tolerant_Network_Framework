@@ -8,9 +8,7 @@ import Messages.*;
 
 import java.io.*;
 import java.net.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,11 +22,11 @@ public class Scheduler {
     private SchedulerMetaInfo smi;
 
     private ReentrantLock nics_Lock;
-    private ArrayList<NIC> nics;
+    private HashMap<String, NIC> nics;
 
     private ReentrantLock ipListeners_Lock;
-    private HashMap<String, ArrayList<SchedulerIPListener>> ipListeners_byNIC;
-    private HashMap<String, ArrayList<SchedulerIPListener>> ipListeners_LINKLOCAL_byNIC;
+    private HashMap<String, SchedulerIPListener> ipListeners_byNIC;
+    private HashMap<String, SchedulerIPListener> ipListeners_LINKLOCAL_byNIC;
 
     private ReentrantLock tms_Lock;
     private HashMap<String, ArrayList<Integer>> transferID_byNIC;
@@ -36,8 +34,8 @@ public class Scheduler {
 
     private ReentrantLock datagramPackets_Lock;
     private ReentrantLock datagramPackets_LINKLOCAL_Lock;
-    private HashMap<Integer, DatagramPacket> transferMetaInfos;
-    private HashMap<Integer, DatagramPacket> transferMetaInfos_LINKLOCAL;
+    private HashMap<Integer, TransferMetaInfo> transferMetaInfos;
+    private HashMap<Integer, TransferMetaInfo> transferMetaInfos_LINKLOCAL;
 
     private ScheduledExecutorService tmiScheduler;
 
@@ -70,11 +68,11 @@ public class Scheduler {
         this.dm = dm;
 
         this.nics_Lock = new ReentrantLock();
-        this.nics = new ArrayList<NIC>();
+        this.nics = new HashMap<String, NIC>();
 
         this.ipListeners_Lock = new ReentrantLock();
-        this.ipListeners_byNIC = new HashMap<String, ArrayList<SchedulerIPListener>>();
-        this.ipListeners_LINKLOCAL_byNIC = new HashMap<String, ArrayList<SchedulerIPListener>>();
+        this.ipListeners_byNIC = new HashMap<String, SchedulerIPListener>();
+        this.ipListeners_LINKLOCAL_byNIC = new HashMap<String, SchedulerIPListener>();
 
 
         this.smi_Lock.lock();
@@ -89,16 +87,13 @@ public class Scheduler {
 
         this.datagramPackets_Lock = new ReentrantLock();
         this.datagramPackets_LINKLOCAL_Lock = new ReentrantLock();
-        this.transferMetaInfos = new HashMap<Integer, DatagramPacket>();
-        this.transferMetaInfos_LINKLOCAL = new HashMap<Integer, DatagramPacket>();
+        this.transferMetaInfos = new HashMap<Integer, TransferMetaInfo>();
+        this.transferMetaInfos_LINKLOCAL = new HashMap<Integer, TransferMetaInfo>();
 
         this.tmiScheduler = Executors.newSingleThreadScheduledExecutor();
         this.tmiScheduler.scheduleWithFixedDelay(sendTMIs, 0, 3, TimeUnit.SECONDS);
         this.rand = new Random();
         this.nodeIdentifier = this.rand.nextInt();
-
-        ChunkManagerMetaInfo cmmi;
-        String docName = null;
 
         this.smi_Lock.lock();
         for (Transmission t : this.smi.scheduledTransmissions.values())
@@ -106,33 +101,10 @@ public class Scheduler {
         this.smi_Lock.unlock();
     }
 
-/*    private void refreshAllNICs() {
-        this.nics_Lock.lock();
-
-        int numberOfNICS = this.nics.size();
-        NIC nic;
-
-        for(int i = 0; i < numberOfNICS; i++){
-            nic = this.nics.get(i);
-            this.nics_Lock.unlock();
-            refreshNICDS(nic);
-            this.nics_Lock.lock();
-        }
-        this.nics_Lock.unlock();
-
-        *//*for (NIC nic : this.nics)
-            refreshNICDS(nic);*//*
-    }*/
-/*
-    ???
-    private void refreshNICDS(NIC nic) {
-        changeNICListenersIP(nic, nic.getAddresses());
-    }*/
-
     public void registerNIC(NIC nic) {
 
         this.nics_Lock.lock();
-        this.nics.add(nic);
+        this.nics.put(nic.name, nic);
         this.nics_Lock.unlock();
 
         this.tms_Lock.lock();
@@ -140,15 +112,53 @@ public class Scheduler {
         this.tms_Lock.unlock();
 
         this.smi_Lock.lock();
-        if(this.smi.scheduledTransmissions.size() != 0)
-            startupNICIPListeners(nic);
+        this.smi.scheduledTransmissions.keySet().forEach(transferID -> nic.registerTransferSchedule());
 
+        SchedulerIPListener sch1 = createNICIPListeners(nic);
+        SchedulerIPListener sch2 = createNICIPListeners_LINKLOCAL(nic);
+        if(this.smi.scheduledTransmissions.size() != 0) {
+
+            if(!this.transferMetaInfos.isEmpty()) {
+                sch1.reactivate();
+            }
+            if(!this.transferMetaInfos_LINKLOCAL.isEmpty()) {
+                sch2.reactivate();
+            }
+            nic.markSchedulerAsActive();
+        }
+        else
+            nic.markSchedulerAsInactive();
         this.smi_Lock.unlock();
 
         System.out.println("(SCHEDULER) REGISTERED NIC");
     }
 
+    private SchedulerIPListener createNICIPListeners(NIC nic){
+        InetAddress ip = null;
+        SchedulerIPListener sch;
+        ArrayList<InetAddress> ips = nic.getNONLinkLocalAddresses();
+        if(!ips.isEmpty())
+            ip = ips.get(0);
+        sch = new SchedulerIPListener(this, nic, ip, false);
+
+        this.ipListeners_byNIC.put(nic.name, sch);
+        return sch;
+    }
+
+    private SchedulerIPListener createNICIPListeners_LINKLOCAL(NIC nic){
+        InetAddress ip = null;
+        SchedulerIPListener sch = null;
+        ArrayList<InetAddress> ips = nic.getLinkLocalAddresses();
+        if(!ips.isEmpty())
+            ip = ips.get(0);
+        sch = new SchedulerIPListener(this, nic, ip, true);
+
+        this.ipListeners_LINKLOCAL_byNIC.put(nic.name, sch);
+        return sch;
+    }
+
     private void createTMIDP(Transmission t){
+        System.out.println("CREATING TMI");
         ChunkManagerMetaInfo cmmi;
         String docName;
 
@@ -161,19 +171,22 @@ public class Scheduler {
             docName = d.documentName;
         }
 
-        TransferMetaInfo tmi = new TransferMetaInfo(this.nodeIdentifier, t.transferID , cmmi, docName, t.confirmation);
-
-        byte[] serializedData = getBytesFromObject(tmi);
-        DatagramPacket dp = new DatagramPacket(serializedData, serializedData.length, t.destIP, t.destPort);
+        cmmi.missingChunks = null;
+        TransferMetaInfo tmi = new TransferMetaInfo(this.nodeIdentifier, t.transferID, cmmi, docName, t.confirmation);
+        System.out.println("GOT NEW TMI");
+        /*byte[] serializedData = getBytesFromObject(tmi);
+        DatagramPacket dp = new DatagramPacket(serializedData, serializedData.length, t.destIP, t.destPort);*/
 
         if (t.destIP.isLinkLocalAddress()) {
             this.datagramPackets_LINKLOCAL_Lock.lock();
-            this.transferMetaInfos_LINKLOCAL.put(tmi.transferID, dp);
+            System.out.println("ADDED TO LINKLOCAL TMIS");
+            this.transferMetaInfos_LINKLOCAL.put(tmi.transferID, tmi);
             this.datagramPackets_LINKLOCAL_Lock.unlock();
         }
         else {
             this.datagramPackets_Lock.lock();
-            this.transferMetaInfos.put(tmi.transferID, dp);
+            System.out.println("ADDED TO TMIS");
+            this.transferMetaInfos.put(tmi.transferID, tmi);
             this.datagramPackets_Lock.unlock();
         }
     }
@@ -191,14 +204,15 @@ public class Scheduler {
 
         InetAddress destIP = dp.getAddress();
         int destPort = dp.getPort();
-
+        System.out.println("PROCESS RECEIVED DP");
         if(obj instanceof TransferMultiReceiverInfo) {
+            System.out.println("    IT'S A TRANSFERMULTIRECEIVERINFO");
             long receivingTime = System.currentTimeMillis();
             TransferMultiReceiverInfo tmri = (TransferMultiReceiverInfo) obj;
 
             //POR CAUSA DE RESPOSTAS CONCORRENTES DE 2 OU MAIS NICS
             this.tms_Lock.lock();
-            if (this.tms_byTransferID.containsKey(tmri.transferID)){
+            if (!this.tms_byTransferID.containsKey(tmri.transferID)){
 
                 this.smi_Lock.lock();
                 Transmission t = this.smi.scheduledTransmissions.get(tmri.transferID);
@@ -224,14 +238,16 @@ public class Scheduler {
                 this.tms_byTransferID.put(tmri.transferID, tms);
                 this.tms_Lock.unlock();
 
-                moveToOngoing(t);
+                moveToOngoing(nic.name, t);
                 tms.processTransferMultiReceiverInfo(tmri, receivingTime);
             }
-            this.tms_Lock.unlock();
+            else
+                this.tms_Lock.unlock();
 
         }
         else{
             if(obj instanceof MissingChunkIDs){
+                System.out.println("    IT'S A MISSINGCHUNKS");
                 MissingChunkIDs mcid = (MissingChunkIDs) obj;
 
                 this.tms_Lock.lock();
@@ -241,17 +257,21 @@ public class Scheduler {
                 tms.processMissingChunkIDs(mcid);
             }
             else{
-                if(obj instanceof IPChange){
-                    IPChange ipc = (IPChange) obj;
+                if(obj instanceof NetworkStatusUpdate){
+                    System.out.println("    IT'S AN NetworkStatusUpdate");
+
+                    NetworkStatusUpdate nsu = (NetworkStatusUpdate) obj;
 
                     this.tms_Lock.lock();
-                    TransferMultiSender tms = this.tms_byTransferID.get(ipc.transferID);
+                    TransferMultiSender tms = this.tms_byTransferID.get(nsu.transferID);
                     this.tms_Lock.unlock();
 
-                    tms.processIPChange(ipc, dp.getAddress());
+                    tms.processNetworkStatusUpdate(nsu, dp.getAddress());
                 }
                 else{
                     if(obj instanceof Over){
+                        System.out.println("    IT'S AN OVER");
+
                         Over over = (Over) obj;
 
                         this.tms_Lock.lock();
@@ -295,10 +315,36 @@ public class Scheduler {
         }
 
         if(schdT)
-            checkIPListeners();
+            for(NIC nic : this.nics.values())
+                checkIPListeners(nic);
 
         printSchedule();
         updateSchedulerMetaInfoFile();
+    }
+
+    private void checkIPListeners(NIC nic) {
+
+        ArrayList<Integer> transferIDs = this.transferID_byNIC.get(nic.name);
+        int numberOfNICTransfers = transferIDs.size();
+
+        boolean hasLinkLocal = false;
+        boolean hasNONLinkLocal = false;
+
+        for (int i = 0; i < numberOfNICTransfers && (!hasLinkLocal || !hasNONLinkLocal); i++){
+            if(this.smi.onGoingTransmissions.get(transferIDs.get(i)).destIP.isLinkLocalAddress())
+                hasLinkLocal = true;
+            else
+                hasNONLinkLocal = true;
+        }
+
+        if(!hasNONLinkLocal)
+            this.ipListeners_byNIC.get(nic.name).kill();
+        if(!hasLinkLocal)
+            this.ipListeners_LINKLOCAL_byNIC.get(nic.name).kill();
+
+        if(!hasLinkLocal && !hasNONLinkLocal)
+            nic.markSchedulerAsInactive();
+
     }
 
     public void sendDP(String nicName, int transferID, InetAddress myIP, int myPort, DatagramPacket dp){
@@ -306,47 +352,40 @@ public class Scheduler {
         boolean res = this.transferID_byNIC.get(nicName).contains(transferID);
         this.tms_Lock.unlock();
 
-        ArrayList <SchedulerIPListener> schls;
-        int size;
-        SchedulerIPListener schl;
+        SchedulerIPListener sch;
 
         if(res){
             this.ipListeners_Lock.lock();
 
             if(myIP.isLinkLocalAddress())
-                schls = this.ipListeners_LINKLOCAL_byNIC.get(nicName);
+                sch = this.ipListeners_LINKLOCAL_byNIC.get(nicName);
             else
-                schls = this.ipListeners_byNIC.get(nicName);
+                sch = this.ipListeners_byNIC.get(nicName);
 
             this.ipListeners_Lock.unlock();
 
-            size = schls.size();
-
-            for (int i = 0; i < size; i++) {
-                schl = schls.get(i);
-                if (schl.ip.equals(myIP) && schl.port == myPort) {
-                    schl.sendDP(dp);
-                    break;
-                }
-            }
+            sch.sendDP(dp);
         }
     }
 
     private final Runnable sendTMIs = () -> {
 
+        ArrayList<DatagramPacket> datagramPackets;
+        SchedulerIPListener sch;
         this.datagramPackets_Lock.lock();
         this.datagramPackets_LINKLOCAL_Lock.lock();
 
         if(!this.transferMetaInfos.values().isEmpty()) {
             System.out.println("TRYING TO SEND TMIS");
             //NON LINKLOCAL
-            for (ArrayList<SchedulerIPListener> schls : this.ipListeners_byNIC.values()) {
-                //System.out.println("AAA");
-                for (SchedulerIPListener schl : schls) {
-                    //System.out.println("BBB");
-                    for (int transferID : this.transferMetaInfos.keySet()) {
+            for(NIC nic : this.nics.values()){
+                //System.out.println("NIC hasConnection?" + nic.hasConnection);
+                if(nic.hasConnection) {
+                    sch = this.ipListeners_byNIC.get(nic.name);
+                    datagramPackets = createDatagramPackets(nic.name, this.transferMetaInfos);
+                    for (DatagramPacket dp : datagramPackets) {
                         //System.out.println("CCC222");
-                        schl.sendDP(this.transferMetaInfos.get(transferID));
+                        sch.sendDP(dp);
                     }
                 }
             }
@@ -355,13 +394,15 @@ public class Scheduler {
         if(!this.transferMetaInfos_LINKLOCAL.values().isEmpty()) {
             System.out.println("TRYING TO SEND LINKLOCAL TMIS");
             //LINKLOCAL
-            for (ArrayList<SchedulerIPListener> schls : this.ipListeners_LINKLOCAL_byNIC.values()) {
-                //System.out.println("AAA");
-                for (SchedulerIPListener schl : schls) {
-                    //System.out.println("BBB");
-                    for (int transferID : this.transferMetaInfos_LINKLOCAL.keySet()) {
-                        //System.out.println("CCC111");
-                        schl.sendDP(this.transferMetaInfos_LINKLOCAL.get(transferID));
+            for(NIC nic: this.nics.values()){
+                if(nic.hasConnection) {
+                    sch = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
+                    datagramPackets = createDatagramPackets(nic.name, this.transferMetaInfos_LINKLOCAL);
+                    //System.out.println("AAA");
+
+                    for (DatagramPacket dp : datagramPackets) {
+                        //System.out.println("CCC222");
+                        sch.sendDP(dp);
                     }
                 }
             }
@@ -372,164 +413,157 @@ public class Scheduler {
         this.datagramPackets_LINKLOCAL_Lock.unlock();
     };
 
-    public void changeNICListenersIP(NIC nic, ArrayList<InetAddress> ips){
-        deleteNICListeners(nic.name);
+    private ArrayList<DatagramPacket> createDatagramPackets(String nicName, HashMap<Integer, TransferMetaInfo> transferMetaInfos){
+        NIC nic = this.nics.get(nicName);
+        int nicSpeed;
+        ArrayList<DatagramPacket> dps = new ArrayList<DatagramPacket>();
+        Transmission t;
+        byte[] data;
+        TransferMetaInfo tmi;
+
+        System.out.println(nic.name + " SPEED " + nic.speed);
+        this.smi_Lock.lock();
+        for(int transferID : transferMetaInfos.keySet()){
+            nicSpeed = nic.getNewTransferSpeed();
+            t = this.smi.scheduledTransmissions.get(transferID);
+            tmi = transferMetaInfos.get(transferID);
+            tmi.setFirstLinkConnection(nicSpeed);
+            data = getBytesFromObject(tmi);
+            dps.add(new DatagramPacket(data, data.length, t.destIP, t.destPort));
+        }
+        this.smi_Lock.unlock();
+
+        return dps;
+    }
+
+    private void reactivateNICIPListeners(NIC nic){
+        SchedulerIPListener sch1 = this.ipListeners_byNIC.get(nic.name);
+        SchedulerIPListener sch2 = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
 
         this.smi_Lock.lock();
         this.tms_Lock.lock();
-        if(this.smi.scheduledTransmissions.size() != 0 || this.transferID_byNIC.get(nic.name).size() != 0)
-            startupNICIPListeners(nic);
-        else
-            nic.markSchedulerAsInactive();
+
+        boolean hasLinkLocal = false;
+        boolean hasNONLinkLocal = false;
+
+        Collection<Transmission> transmissions = this.smi.scheduledTransmissions.values();
+        Iterator<Transmission> it = transmissions.iterator();
+        Transmission t;
+
+        while (it.hasNext() && (!hasLinkLocal || !hasNONLinkLocal)) {
+            t = it.next();
+            if (t.destIP.isLinkLocalAddress())
+                hasLinkLocal = true;
+            else
+                hasNONLinkLocal = true;
+        }
+
+        ArrayList<Integer> transferIDs = this.transferID_byNIC.get(nic.name);
+        int numberOfNICTransfers = transferIDs.size();
+
+        for (int i = 0; i < numberOfNICTransfers && (!hasLinkLocal || !hasNONLinkLocal); i++){
+            if(this.smi.onGoingTransmissions.get(transferIDs.get(i)).destIP.isLinkLocalAddress())
+                hasLinkLocal = true;
+            else
+                hasNONLinkLocal = true;
+        }
+
+        if(nic.hasConnection && (hasLinkLocal || hasNONLinkLocal)){
+            if(hasNONLinkLocal && !sch1.isRunning && sch1.ownIP != null)
+                sch1.reactivate();
+
+            if(hasLinkLocal && !sch2.isRunning && sch2.ownIP != null)
+                sch2.reactivate();
+
+            //nic.markSchedulerAsActive();
+        }
+        else {
+            sch1.kill();
+            sch2.kill();
+            //nic.markSchedulerAsInactive();
+        }
 
         this.smi_Lock.unlock();
         this.tms_Lock.unlock();
+    }
 
-        //UPDATE TRANSFERMULTISENDERs IP
+    public void changeSchedulerIP(NIC nic, ArrayList<InetAddress> ips){
+        if(this.nics.containsKey(nic.name)) {
+            System.out.println("CHANGE IP");
 
-        Transmission transm;
-        TransferMultiSender tms;
+            //UPDATE TRANSFERMULTISENDERs IP
 
-        this.tms_Lock.lock();
-        ArrayList <Integer> transferIDs = this.transferID_byNIC.get(nic.name);
-        this.tms_Lock.unlock();
-
-        int numberOfTransferIDs = transferIDs.size();
-        int transferID;
-
-        for(int i = 0; i < numberOfTransferIDs; i++){
-            transferID = transferIDs.get(i);
-            this.smi_Lock.lock();
-            transm = this.smi.onGoingTransmissions.get(transferID);
-            this.smi_Lock.unlock();
+            Transmission transm;
+            TransferMultiSender tms;
 
             this.tms_Lock.lock();
-            tms = this.tms_byTransferID.get(transferID);
+            ArrayList<Integer> transferIDs = this.transferID_byNIC.get(nic.name);
             this.tms_Lock.unlock();
 
-            tms.changeOwnIP(ips, transm.destIP.isLinkLocalAddress());
+            int numberOfTransferIDs = transferIDs.size();
+            int transferID;
+
+            for (int i = 0; i < numberOfTransferIDs; i++) {
+                transferID = transferIDs.get(i);
+                this.smi_Lock.lock();
+                transm = this.smi.onGoingTransmissions.get(transferID);
+                this.smi_Lock.unlock();
+
+                this.tms_Lock.lock();
+                tms = this.tms_byTransferID.get(transferID);
+                this.tms_Lock.unlock();
+
+                tms.changeOwnIP(ips, transm.destIP.isLinkLocalAddress(), nic.getActiveTransferSpeed());
+            }
+
+            SchedulerIPListener sch1 = this.ipListeners_byNIC.get(nic.name);
+            SchedulerIPListener sch2 = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
+            sch1.changeOwnIP(ips);
+            sch2.changeOwnIP(ips);
+
+            reactivateNICIPListeners(nic);
         }
     }
 
-    public void changeNICConnectionStatus(NIC nic, boolean hasConnection) {
+    public void changeNICConnectionStatus(NIC nic, boolean hasConnection, boolean hasNONLinkLocal, boolean hasLinkLocal) {
+        if(this.nics.containsKey(nic.name)) {
+            TransferMultiSender tms;
 
-        this.smi_Lock.lock();
-        this.tms_Lock.lock();
-        boolean isScheduled = this.smi.scheduledTransmissions.size() != 0 || this.transferID_byNIC.get(nic.name).size() != 0;
-        this.smi_Lock.unlock();
-        this.tms_Lock.unlock();
-
-        if(hasConnection && isScheduled)
-            startupNICIPListeners(nic);
-        else
-            if(!hasConnection)
-                deleteNICListeners(nic.name);
-
-        TransferMultiSender tms;
-
-        this.tms_Lock.lock();
-        for(int transferID : this.transferID_byNIC.get(nic.name)) {
-            tms = this.tms_byTransferID.get(transferID);
+            this.tms_Lock.lock();
+            for (int transferID : this.transferID_byNIC.get(nic.name)) {
+                tms = this.tms_byTransferID.get(transferID);
+                this.tms_Lock.unlock();
+                if(!hasConnection)
+                    tms.updateConnectionStatus(hasConnection);
+                else {
+                    if ((tms.ownIP.isLinkLocalAddress() && hasLinkLocal) || (!tms.ownIP.isLinkLocalAddress() && hasNONLinkLocal)) {
+                        //System.out.println("UPDATING TRANSFERMULTISENDER CONNECTION STATUS NOW");
+                        tms.updateConnectionStatus(hasConnection);
+                    }
+                }
+                this.tms_Lock.lock();
+            }
             this.tms_Lock.unlock();
-            tms.updateConnectionStatus(hasConnection);
-            this.tms_Lock.lock();
-        }
-        this.tms_Lock.unlock();
-    }
 
-    private void createNICIPListeners(NIC nic){
-        ArrayList<SchedulerIPListener> schl = new ArrayList<SchedulerIPListener>();
-        ArrayList<InetAddress> ips = nic.getNONLinkLocalAddresses();
-        System.out.println(ips);
-        for(InetAddress ip : ips) {
-            schl.add(new SchedulerIPListener(this, nic, ip));
-        }
-        this.ipListeners_byNIC.put(nic.name, schl);
-    }
 
-    private void createNICIPListeners_LINKLOCAL(NIC nic){
-        ArrayList<SchedulerIPListener> schl = new ArrayList<SchedulerIPListener>();
-        ArrayList<InetAddress> ips = nic.getLinkLocalAddresses();
+            //System.out.println("NON " + hasNONLinkLocal + " ll" + hasLinkLocal);
+            SchedulerIPListener sch1 = this.ipListeners_byNIC.get(nic.name);
+            SchedulerIPListener sch2 = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
 
-        for(InetAddress ip : ips)
-            schl.add(new SchedulerIPListener(this, nic, ip));
-
-        this.ipListeners_LINKLOCAL_byNIC.put(nic.name, schl);
-    }
-
-    private void startupNICIPListeners(NIC nic){
-        System.out.println("                STARTUPNICIPLISTENERS (" + nic.name + ")");
-        nic.markSchedulerAsActive();
-        ArrayList<InetAddress> ips = new ArrayList<InetAddress>();
-
-        if(nic.checkConnectionStatus()) {
-            //NON LINKLOCAL
-            this.datagramPackets_Lock.lock();
-            if(this.transferMetaInfos.size() != 0) {
-                this.datagramPackets_Lock.unlock();
-
-                this.ipListeners_Lock.lock();
-                if (!this.ipListeners_byNIC.containsKey(nic.name))
-                    createNICIPListeners(nic);
-
-                for (SchedulerIPListener schl : this.ipListeners_byNIC.get(nic.name)) {
-                    if (!schl.isRunning)
-                        new Thread(schl).start();
-                }
-                this.ipListeners_Lock.unlock();
+            if(!hasConnection) {
+                sch1.updateConnectionStatus(hasConnection);
+                sch2.updateConnectionStatus(hasConnection);
             }
-            else
-                this.datagramPackets_Lock.unlock();
-
-            //LINKLOCAL
-            this.datagramPackets_LINKLOCAL_Lock.lock();
-            if (this.transferMetaInfos_LINKLOCAL.size() != 0) {
-                this.datagramPackets_LINKLOCAL_Lock.unlock();
-
-                this.ipListeners_Lock.lock();
-                if (!this.ipListeners_LINKLOCAL_byNIC.containsKey(nic.name))
-                    createNICIPListeners_LINKLOCAL(nic);
-
-                for (SchedulerIPListener schl : this.ipListeners_LINKLOCAL_byNIC.get(nic.name)) {
-                    if (!schl.isRunning)
-                        new Thread(schl).start();
-                }
-                this.ipListeners_Lock.unlock();
+            else{
+                if(hasNONLinkLocal)
+                    sch1.updateConnectionStatus(hasConnection);
+                else
+                    sch2.updateConnectionStatus(hasConnection);
             }
-            else
-                this.datagramPackets_LINKLOCAL_Lock.unlock();
-        }
-    }
+            reactivateNICIPListeners(nic);
 
-    private void deleteNICListeners(String nicName){
-        this.ipListeners_Lock.lock();
-
-        if(this.ipListeners_byNIC.containsKey(nicName)) {
-            for (SchedulerIPListener schl : this.ipListeners_byNIC.get(nicName))
-                schl.kill();
-            this.ipListeners_byNIC.remove(nicName);
         }
 
-        if(this.ipListeners_LINKLOCAL_byNIC.containsKey(nicName)) {
-            for (SchedulerIPListener schl : this.ipListeners_LINKLOCAL_byNIC.get(nicName))
-                schl.kill();
-            this.ipListeners_LINKLOCAL_byNIC.remove(nicName);
-        }
-
-        this.ipListeners_Lock.unlock();
-    }
-    private void checkIPListeners(){
-
-        for(NIC nic : this.nics){
-            this.tms_Lock.lock();
-            if(this.transferID_byNIC.get(nic.name).size() == 0) {
-                this.tms_Lock.unlock();
-                nic.markSchedulerAsInactive();
-                deleteNICListeners(nic.name);
-            }
-            else
-                this.tms_Lock.unlock();
-        }
     }
 
     /*
@@ -545,9 +579,14 @@ public class Scheduler {
             this.smi_Lock.unlock();
 
             createTMIDP(t);
+            this.nics_Lock.lock();
+            for (NIC nic : this.nics.values()) {
+                nic.registerTransferSchedule();
+                nic.markSchedulerAsActive();
+                reactivateNICIPListeners(nic);
+            }
 
-            for (NIC nic : this.nics)
-                startupNICIPListeners(nic);
+            this.nics_Lock.unlock();
 
             printSchedule();
 
@@ -555,7 +594,7 @@ public class Scheduler {
         }
     }
 
-    private void moveToOngoing(Transmission transmission) {
+    private void moveToOngoing(String nicName, Transmission transmission) {
 
         this.smi_Lock.lock();
         this.smi.scheduledTransmissions.remove(transmission.transferID);
@@ -563,10 +602,18 @@ public class Scheduler {
         int numberOfSchdT = this.smi.scheduledTransmissions.size();
         this.smi_Lock.unlock();
 
-        if(numberOfSchdT == 0) {   //inactive
-            System.out.println("FOI O MOVE TO ON GOING");
-            checkIPListeners();
-        }
+        if(numberOfSchdT == 0)
+            for(NIC nic : this.nics.values())
+                checkIPListeners(nic);
+
+        this.nics_Lock.lock();
+        for(NIC nic : this.nics.values())
+            if(!nic.name.equals(nicName))
+                nic.registerTransferCancel();
+            else
+                nic.registerTransferStart();
+
+        this.nics_Lock.unlock();
 
         removeTMIDP(transmission);
 
@@ -584,8 +631,17 @@ public class Scheduler {
 
         createTMIDP(t);
 
-        for(NIC nic : this.nics)
-            startupNICIPListeners(nic);
+        this.nics_Lock.lock();
+        for(NIC nic : this.nics.values()) {
+            if(nic.name.equals(nicName))
+                nic.registerTransferEnd();
+            nic.registerTransferStart();
+            nic.markSchedulerAsActive();
+
+            reactivateNICIPListeners(nic);
+
+        }
+        this.nics_Lock.unlock();
 
         this.tms_Lock.lock();
         ArrayList<Integer> tmsIDs = this.transferID_byNIC.get(nicName);
@@ -617,6 +673,11 @@ public class Scheduler {
         this.smi_Lock.unlock();
 
         this.tms_Lock.lock();
+
+        this.nics_Lock.lock();
+        this.nics.get(nicName).registerTransferEnd();
+        this.nics_Lock.unlock();
+
         ArrayList<Integer> tmsIDs = this.transferID_byNIC.get(nicName);
 
         if(tmsIDs.contains(transferID)) {
@@ -625,7 +686,8 @@ public class Scheduler {
             this.transferID_byNIC.put(nicName, tmsIDs);
 
             if(numberofSchT == 0)
-                checkIPListeners();
+                for(NIC nic : this.nics.values())
+                    checkIPListeners(nic);
 
             this.tms_byTransferID.remove(transferID);
         }
@@ -644,7 +706,8 @@ public class Scheduler {
         this.smi_Lock.unlock();
 
         if(numberOfSchldT == 0)
-            checkIPListeners();
+            for(NIC nic : this.nics.values())
+                checkIPListeners(nic);
 
         removeTMIDP(transmission);
 
@@ -813,13 +876,21 @@ public class Scheduler {
     }
 
     private Object getObjectFromBytes(byte[] data){
+        if(data == null || data.length == 0) {
+            System.out.println("                MENSAGEM VAZIA WHATTTTTTTTTTTTTT " + (data==null) + " " + data.length);
+            try {
+                Thread.sleep(100000000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         ByteArrayInputStream bis = new ByteArrayInputStream(data);
         ObjectInput in = null;
         Object o = null;
 
         try {
             in = new ObjectInputStream(bis);
-            o = in.readObject();
+            o = in.readObject(); //EXCEPTION!!!! java.io.EOFException
         }
         catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();

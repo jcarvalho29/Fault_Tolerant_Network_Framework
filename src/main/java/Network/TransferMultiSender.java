@@ -23,7 +23,7 @@ public class TransferMultiSender{
     private int transferID;
 
     private String nicName;
-    private InetAddress ownIP;
+    public InetAddress ownIP;
     private int ownPort;
 
     private InetAddress destIP;
@@ -253,8 +253,8 @@ public class TransferMultiSender{
                     processedMC[processedMCPointer] = mc[i];
                     processedMCPointer++;
                 }
-                else
-                    System.out.println("REMOVED A REPETITIVE EMISSION ( " + id + " )");
+               /* else
+                    System.out.println("REMOVED A REPETITIVE EMISSION ( " + id + " )");*/
             }
 
             int[] aux = new int[processedMCPointer];
@@ -284,10 +284,11 @@ public class TransferMultiSender{
         }
     }
 
-    public void processIPChange(IPChange ipc, InetAddress newIP){
-        if(this.transferID == ipc.transferID && !this.destIP.equals(newIP)) {
+    public void processNetworkStatusUpdate(NetworkStatusUpdate nsu, InetAddress newIP){
+        if(this.transferID == nsu.transferID && !this.destIP.equals(newIP)) {
             this.destIP = newIP;
             changeFastUnicastSendersDestIP(this.destIP);
+            changeFastUnicastSendersDPS(nsu.newDPS);
         }
     }
 
@@ -316,6 +317,16 @@ public class TransferMultiSender{
 
     }
 
+    public void changeFastUnicastSendersDPS(int dps){
+        FastUnicastSender fus;
+        int numberOfFUS = this.fastSenders.size();
+
+        for(int i = 0; i < numberOfFUS; i++){
+            fus = this.fastSenders.get(i);
+            fus.changeDPS(dps);
+        }
+    }
+
     public void changeFastUnicastSendersDestIP(InetAddress newDestIP){
         FastUnicastSender fus;
         int numberOfFUS = this.fastSenders.size();
@@ -326,7 +337,7 @@ public class TransferMultiSender{
         }
     }
 
-    public void changeOwnIP(ArrayList<InetAddress> addresses, boolean isLinkLocal){
+    public void changeOwnIP(ArrayList<InetAddress> addresses, boolean isLinkLocal, int linkSpeed){
         System.out.println("\t\t\tCHANGING IP!!");
         if(!addresses.contains(this.ownIP)){
             InetAddress newIP = null;
@@ -350,7 +361,7 @@ public class TransferMultiSender{
                 InetSocketAddress isa = new InetSocketAddress(newIP, this.ownUnicastPort);
                 this.unicastSocket.bind(isa); // EXCEPTION already bound!!
 */
-                changeIP(this.ownIP);
+                changeIP(this.ownIP, linkSpeed);
 
                 System.out.println("hasConnection? " + this.hasConnection);
 
@@ -381,17 +392,17 @@ public class TransferMultiSender{
     }
 
     public void updateConnectionStatus(boolean value){
-
+        //System.out.println("        CHANGING TMS CONNECTION STATUS");
         this.hasConnection = value;
 
         for(FastUnicastSender fus : this.fastSenders)
             fus.changeHasConnection(value);
     }
 
-    public void changeIP(InetAddress newIP){
+    public void changeIP(InetAddress newIP, int LinkSpeed){
         //enviar multiplos ipchanges ao receptor para que este saiba que mudei de IP
-        IPChange ipc = new IPChange(this.transferID, newIP);
-        byte[] serializedIPC = getBytesFromObject(ipc);
+        NetworkStatusUpdate nsu = new NetworkStatusUpdate(this.transferID, newIP, LinkSpeed);
+        byte[] serializedIPC = getBytesFromObject(nsu);
 
         DatagramPacket packet = new DatagramPacket(serializedIPC, serializedIPC.length, this.destIP, this.destUnicastPort);
 

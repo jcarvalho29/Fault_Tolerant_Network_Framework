@@ -129,12 +129,12 @@ public class KnockManager implements Runnable{
 
                 System.out.println("hasConnection? " + this.hasConnection + " => TRUE");
 
-                this.hasConnection = true;
-                Thread t = new Thread(this);
-                t.start();
+                updateConnectionStatus(true);
+
                 System.out.println("CHANGED IP AND CREATED NEW THREAD (changeIP)");
 
                 System.out.println("Listening to NEW IP =>" + this.ownIP + " PORT =>" + this.ownPort + "\nhasConnection? " + this.hasConnection);
+
             }
             else {
                 System.out.println("NEW ADDRESSES SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
