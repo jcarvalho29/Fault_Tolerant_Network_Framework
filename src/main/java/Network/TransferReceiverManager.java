@@ -129,16 +129,16 @@ public class TransferReceiverManager implements Runnable{
     }
 
     public void sendNetworkStatusUpdate(InetAddress newIP, int dps, boolean calculateDPS){
+        System.out.println("                        START SEND NETWORK STATUS");
         this.unicastSocket.close();
         this.ownIP = newIP;
         bindDatagramSocket();
 
         //enviar multiplos ipchanges ao transmissor para que este saiba que mudei de IP
-
         if(calculateDPS){
             int avgRTT = this.stats.getAverageRTT();
             dps = this.stats.getDPS();
-            int newDPS = this.stats.calculateDPS();
+            int newDPS = dps;// this.stats.calculateDPS();
 
             if(dps != newDPS) {
                 for (FastUnicastListener ful : this.fastListeners)
@@ -158,6 +158,7 @@ public class TransferReceiverManager implements Runnable{
             try {
                 if(!this.unicastSocket.isClosed())
                     this.unicastSocket.send(packet);
+                System.out.println("                            SENT NSU");
                 Thread.sleep(5);
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
@@ -169,6 +170,7 @@ public class TransferReceiverManager implements Runnable{
         for (int i = 0; i < numberOfFUL; i++) {
             ful = this.fastListeners.get(i);
             ful.changeIP(newIP);
+            System.out.println("CHANGED FUL IP");
         }
 
         this.hasConnection = true;

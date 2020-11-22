@@ -196,7 +196,7 @@ public class ListenerMainUnicast implements Runnable{
                 if(this.receivedIDs.contains(nsu.transferID)){
                     TransferReceiverManager trm = this.infoReceiverManager.get(nsu.transferID);
 
-                    if(!trm.destIP.equals(nsu.newIP)) {
+                    if(!trm.destIP.equals(dp.getAddress())) {
                         trm.changeDestIP(dp.getAddress());
                         System.out.println("SENDER CHANGED IP");
                     }

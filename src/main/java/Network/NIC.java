@@ -566,20 +566,35 @@ public class NIC {
     public int getActiveTransferSpeed(){
         int sp = -1;
 
-        this.nicSpeed_Lock.lock();
-        sp = this.speed/this.activeTransfers;
-        this.nicSpeed_Lock.unlock();
+        while(sp == -1) {
+            this.nicSpeed_Lock.lock();
+            sp = this.speed ;
+            this.nicSpeed_Lock.unlock();
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
 
+        sp /= this.activeTransfers;
         return sp;
     }
 
     public int getNewTransferSpeed(){
         int sp = -1;
 
-        this.nicSpeed_Lock.lock();
-        sp = this.speed/(this.activeTransfers+1);
-        this.nicSpeed_Lock.unlock();
-
+        while(sp == -1) {
+            this.nicSpeed_Lock.lock();
+            sp = this.speed;
+            this.nicSpeed_Lock.unlock();
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        sp /= (this.activeTransfers + 1);
         return sp;
     }
 
@@ -595,12 +610,18 @@ public class NIC {
 
 
     public int getMTU() {
-        int mtu;
+        int mtu = 0;
 
-        this.statsLock.lock();
-        mtu = this.mtu;
-        this.statsLock.unlock();
-
+        while(mtu == 0) {
+            this.statsLock.lock();
+            mtu = this.mtu;
+            this.statsLock.unlock();
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         return mtu;
     }
 

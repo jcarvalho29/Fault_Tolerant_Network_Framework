@@ -278,7 +278,7 @@ public class ReceiverStats {
         System.out.println("capacityDPS / numberOfListeners " + capacityInDPS + " / " + this.numberOfListeners + " = " + (capacityInDPS/this.numberOfListeners));
         //CHANGE aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
 
-        if(!this.dpsPerCycle.isEmpty()) {
+/*        if(!this.dpsPerCycle.isEmpty()) {
             float currentDropRate = this.drops_PerTransferCycle.get(this.drops_PerTransferCycle.size() - 1);
 
             if (currentDropRate > 0.1 && currentDropRate < 0.2)
@@ -291,7 +291,7 @@ public class ReceiverStats {
 
             maxDPSPerListener = (int) Math.max(maxDPSPerListener * (1 - currentDropRate), 10);
 
-            /*
+            *//*
             int lowerLimit = (int) (currentDPS - (currentDPS * .1));
             int upperLimit = (int) (currentDPS + (currentDPS * .1));
 
@@ -303,12 +303,12 @@ public class ReceiverStats {
                     maxDPSPerListener = Math.max((int) (maxDPSPerListener * 1.05), 10);
                 else
                     maxDPSPerListener = Math.max((int) (maxDPSPerListener * (currentDropRate * 2)), 10);
-            }*/
-        }
-        if(!this.dpsPerCycle.isEmpty()) {
+            }*//*
+        }*/
+/*        if(!this.dpsPerCycle.isEmpty()) {
             int currentDPS = this.dpsPerCycle.get(this.dpsPerCycle.size() - 1);
 
-            if ((maxDPSPerListener < currentDPS * 0.9 || maxDPSPerListener > currentDPS * 1.1) && maxDPSPerListener - currentDPS > 800) {
+            if ((maxDPSPerListener < currentDPS * 0.9 || maxDPSPerListener > currentDPS * 1.1) && Math.abs(maxDPSPerListener - currentDPS) > 800) {
             }
             else {
                 maxDPSPerListener = currentDPS;
@@ -316,9 +316,10 @@ public class ReceiverStats {
             registerNewDPS(maxDPSPerListener);
         }
         else
-            registerNewDPS(maxDPSPerListener);
+            registerNewDPS(maxDPSPerListener);*/
+        registerNewDPS(maxDPSPerListener);
 
-
+        System.out.println("GOT DPS => " + maxDPSPerListener);
         return maxDPSPerListener;
     }
 
