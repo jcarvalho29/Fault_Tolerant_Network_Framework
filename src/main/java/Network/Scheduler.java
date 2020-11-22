@@ -202,8 +202,6 @@ public class Scheduler {
 
         Object obj = getObjectFromBytes(dp.getData());
 
-        InetAddress destIP = dp.getAddress();
-        int destPort = dp.getPort();
         System.out.println("PROCESS RECEIVED DP");
         if(obj instanceof TransferMultiReceiverInfo) {
             System.out.println("    IT'S A TRANSFERMULTIRECEIVERINFO");
@@ -218,6 +216,7 @@ public class Scheduler {
                 Transmission t = this.smi.scheduledTransmissions.get(tmri.transferID);
                 this.smi_Lock.unlock();
 
+
                 ChunkManager cm;
                 if (this.dm.documents.containsKey(t.infoHash)) {
                     Document d = this.dm.documents.get(t.infoHash);
@@ -227,7 +226,7 @@ public class Scheduler {
                     cm = this.dm.messages.get(t.infoHash);
                 }
 
-                TransferMultiSender tms = new TransferMultiSender(this, this.nodeIdentifier, tmri.transferID, nic.name, ip, port, destIP, destPort, cm, true);
+                TransferMultiSender tms = new TransferMultiSender(this, this.nodeIdentifier, tmri.transferID, nic.name, ip, port, t.destIP, t.destPort, cm, true);
 
                 ArrayList<Integer> tmsID = this.transferID_byNIC.get(nic.name);
 
@@ -258,7 +257,7 @@ public class Scheduler {
             }
             else{
                 if(obj instanceof NetworkStatusUpdate){
-                    System.out.println("    IT'S AN NetworkStatusUpdate");
+                    System.out.println("    ==========================================>>>>>>> IT'S AN NetworkStatusUpdate");
 
                     NetworkStatusUpdate nsu = (NetworkStatusUpdate) obj;
 
@@ -269,19 +268,27 @@ public class Scheduler {
                     tms.processNetworkStatusUpdate(nsu, dp.getAddress());
                 }
                 else{
-                    if(obj instanceof Over){
-                        System.out.println("    IT'S AN OVER");
+                    if(obj instanceof Over) {
 
                         Over over = (Over) obj;
 
-                        this.tms_Lock.lock();
-                        TransferMultiSender tms = this.tms_byTransferID.get(over.transferID);
-                        this.tms_Lock.unlock();
 
-                        if(tms != null)
-                            tms.processOver(over);
-                        else{
-                            processEarlyOver(over, ip.isLinkLocalAddress());
+                        this.smi_Lock.lock();
+                        boolean isScheduled = this.smi.scheduledTransmissions.containsKey(over.transferID);
+                        boolean isOnGoing = this.smi.onGoingTransmissions.containsKey(over.transferID);
+                        this.smi_Lock.unlock();
+
+                        if (isScheduled || isOnGoing) {
+                            System.out.println("    IT'S AN OVER (" + over.transferID + ")");
+                            this.tms_Lock.lock();
+                            TransferMultiSender tms = this.tms_byTransferID.get(over.transferID);
+                            this.tms_Lock.unlock();
+
+                            if (tms != null)
+                                tms.processOver(over);
+                            else {
+                                processEarlyOver(over, ip.isLinkLocalAddress());
+                            }
                         }
                     }
                 }

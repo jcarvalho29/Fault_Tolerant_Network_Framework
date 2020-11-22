@@ -93,7 +93,7 @@ public class NIC {
         if(!this.isCheckerRunning) {
             System.out.println("                            BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
 
-            this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
+            this.ipChangeCheckerSES.schedule(this.checkIPChange,500, TimeUnit.MILLISECONDS);
         }
         this.stopChecker_Lock.unlock();
     }
@@ -288,7 +288,7 @@ public class NIC {
         //System.out.println("============================>>>>>>>>>>CHECKING CHECKER");
         if(!this.stopChecker){
             //System.out.println("RESTARTING " + this.name + " IP CHECKER");
-            this.ipChangeCheckerSES.schedule(this.checkIPChange,200, TimeUnit.MILLISECONDS);
+            this.ipChangeCheckerSES.schedule(this.checkIPChange,500, TimeUnit.MILLISECONDS);
         }
         else {
             this.isCheckerRunning = false;

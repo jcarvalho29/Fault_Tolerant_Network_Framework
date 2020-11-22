@@ -290,7 +290,7 @@ public class TransferReceiverManager implements Runnable{
             mcID = new MissingChunkIDs(this.tmi.transferID, cmcIDs.get(i), dps);
             mcIDs.add(mcID);
         }
-        System.out.println("MISSINGCHUNKIDS WITH DPS " + dps);
+        System.out.println("MISSINGCHUNKIDS WITH DPS " + dps + " TO " + this.destIP + ":" + this.destPort);
 
         byte[] data;
         DatagramPacket dp;

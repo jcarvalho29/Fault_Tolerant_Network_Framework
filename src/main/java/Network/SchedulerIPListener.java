@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class SchedulerIPListener implements Runnable{
@@ -16,6 +19,10 @@ public class SchedulerIPListener implements Runnable{
     public boolean isLinkLocal;
 
     private DatagramSocket ds;
+
+    private ReentrantLock datagramPackets_Lock;
+    private ScheduledExecutorService lateDPScheduler;
+    private ArrayList<DatagramPacket> datagramPackets;
 
     private boolean hasConnection;
     private boolean run;
@@ -36,12 +43,11 @@ public class SchedulerIPListener implements Runnable{
         this.ownPort = -1;
         this.lockPort = false;
 
+        this.datagramPackets_Lock = new ReentrantLock();
+        this.datagramPackets = new ArrayList<DatagramPacket>();
+        this.lateDPScheduler = Executors.newSingleThreadScheduledExecutor();
         this.isLinkLocal = isLinkLocal;
 
-    }
-
-    private int getPort(){
-        return this.ownPort;
     }
 
     private void bindDatagramSocket() {
@@ -153,7 +159,38 @@ public class SchedulerIPListener implements Runnable{
         new Thread(this).start();
     }
 
-    public void sendDP(DatagramPacket dp){
+    private final Runnable sendLateDPs = () -> {
+
+        if(this.hasConnection) {
+            this.datagramPackets_Lock.lock();
+            try {
+                int numberOfDatagrams = this.datagramPackets.size();
+                DatagramPacket dp;
+                for(int i = 0; i <  numberOfDatagrams && this.hasConnection; i++) {
+                    if (this.ds != null && !this.ds.isClosed()) {
+                        dp = this.datagramPackets.get(i);
+                        this.ds.send(dp);
+                        this.datagramPackets.remove(i);
+                        i--;
+                        numberOfDatagrams--;
+                        System.out.println("(SCHEDULERIPLISTENER) ===============>SENT LATE DATAGRAMPACKET THROUGH " + this.ownIP + ":" + this.ownPort + " TO " + dp.getAddress() + ":" + dp.getPort());
+                    } else
+                        System.out.println("=====================================================>>>>> (SCHIPLISTENER) ERROR SENDING DP");
+                }
+            } catch (IOException e) {
+                System.out.println("IP " + this.ownIP);
+                e.printStackTrace();
+            }
+            this.datagramPackets_Lock.unlock();
+        }
+        else {
+            this.datagramPackets_Lock.lock();
+            this.lateDPScheduler.schedule(this.sendLateDPs, 1, TimeUnit.SECONDS);
+            this.datagramPackets_Lock.lock();
+        }
+    };
+
+        public void sendDP(DatagramPacket dp){
         if(this.hasConnection) {
             try {
                 if (this.ds != null && !this.ds.isClosed()) {
@@ -165,6 +202,12 @@ public class SchedulerIPListener implements Runnable{
                 System.out.println("IP " + this.ownIP);
                 e.printStackTrace();
             }
+        }
+        else{
+            this.datagramPackets_Lock.lock();
+            this.datagramPackets.add(dp);
+            this.lateDPScheduler.schedule(this.sendLateDPs, 1, TimeUnit.SECONDS);
+            this.datagramPackets_Lock.unlock();
         }
     }
 

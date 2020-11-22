@@ -122,12 +122,12 @@ public class ListenerMainUnicast implements Runnable{
     public void updateConnectionStatus(boolean value){
         boolean oldHasConnection = this.hasConnection;
         this.hasConnection = value;
-            System.out.println("UPDATED CONNECTION STATUS FROM " + oldHasConnection + " TO " + value);
+            //System.out.println("UPDATED CONNECTION STATUS FROM " + oldHasConnection + " TO " + value);
 
         if(value && !oldHasConnection && this.currentIP != null){
             bindDatagramSocket();
             new Thread(this).start();
-            System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + " (updateConnectionStatus)");
+            //System.out.println("Listening to NEW IP =>" + this.currentIP + " PORT =>" + this.unicastPort + " (updateConnectionStatus)");
         }
         else{
             if(!value && this.unicastSocket != null)
@@ -190,13 +190,14 @@ public class ListenerMainUnicast implements Runnable{
         }
         else{
             if(obj instanceof NetworkStatusUpdate){
+                System.out.println("==============================================>>>>>>>>>>>>> ITS A NETWORKSTATUSUPDATE");
                 NetworkStatusUpdate nsu = (NetworkStatusUpdate) obj;
 
                 if(this.receivedIDs.contains(nsu.transferID)){
                     TransferReceiverManager trm = this.infoReceiverManager.get(nsu.transferID);
 
                     if(!trm.destIP.equals(nsu.newIP)) {
-                        trm.changeDestIP(nsu.newIP);
+                        trm.changeDestIP(dp.getAddress());
                         System.out.println("SENDER CHANGED IP");
                     }
 

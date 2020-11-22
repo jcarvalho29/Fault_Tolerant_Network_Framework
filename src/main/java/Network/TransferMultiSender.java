@@ -86,7 +86,7 @@ public class TransferMultiSender{
             this.timeout_Lock.lock();
             if(this.consecutiveTimeouts >= 12){
                 this.kill();
-                System.out.println("KILLED DUE TO TIMEOUT");
+                System.out.println("(TMS) KILLED DUE TO TIMEOUT");
             }
             this.timeout_Lock.unlock();
         }
@@ -96,7 +96,7 @@ public class TransferMultiSender{
             for (FastUnicastSender fastSender : this.fastSenders)
                 sending = (sending || fastSender.isRunning());
 
-            System.out.println("SENDING " + sending);
+            System.out.println("(TMS) SENDING " + sending);
 
             this.timeout_Lock.lock();
             if(sending) {
@@ -114,7 +114,7 @@ public class TransferMultiSender{
             if(this.consecutiveTimeouts >= 30) {
                 kill();
                 this.sch.markAsInterrupted(this.nicName, this.transferID);
-                System.out.println("KILLED DUE TO TIMEOUT");
+                System.out.println("(TMS) KILLED DUE TO TIMEOUT");
             }
             this.timeout_Lock.unlock();
         }
@@ -127,7 +127,7 @@ public class TransferMultiSender{
         this.TMRI_Lock.unlock();
 
         this.stats.setTrmiReceiveTime(receiveTime);
-        System.out.println("RTT => " + this.stats.handshakeRTT);
+        System.out.println("(TMS) RTT => " + this.stats.handshakeRTT);
         int[] mc;
         int[] mcholder;
 
@@ -169,11 +169,11 @@ public class TransferMultiSender{
                 split = chunksPerSender*(i+1);
                 chunkIDS = new int[chunksPerSender];
             }
-            System.out.println("FROM " + chunksPerSender*i + " TO " + split + " ( " + (split - chunksPerSender*i) + " ) ARRAY SIZE OF " + chunkIDS.length);
+            System.out.println("(TMS) FROM " + chunksPerSender*i + " TO " + split + " ( " + (split - chunksPerSender*i) + " ) ARRAY SIZE OF " + chunkIDS.length);
             System.arraycopy(mc, chunksPerSender*i, chunkIDS, 0, split - chunksPerSender*i);
 
             fus = new FastUnicastSender(this.transferID, this.destIP, tmri.ports[i], this.ownIP, this.cm, chunkIDS, tmri.datagramPacketsPerSecondPerReceiver);
-            System.out.println("SENDING TO " + tmri.ports[i] + " | " + chunksPerSender*i + " -> " + (split-1) + " | ( 0 -> " + this.cm.mi.numberOfChunks + " )");
+            System.out.println("(TMS) SENDING TO " + tmri.ports[i] + " | " + chunksPerSender*i + " -> " + (split-1) + " | ( 0 -> " + this.cm.mi.numberOfChunks + " )");
             this.fastSenders.add(fus);
 
             t = new Thread(fus);
@@ -297,10 +297,10 @@ public class TransferMultiSender{
             if (over.isInterrupt) {
                 this.wasInterrupted = true;
                 this.sch.markAsInterrupted(nicName, transferID);
-                System.out.println("=>>> INTERRUPTED");
+                System.out.println("(TMS) =>>> INTERRUPTED");
             } else {
                 this.sch.markAsFinished(nicName, transferID);
-                System.out.println("=>>> TRANSFER ENDED");
+                System.out.println("(TMS) =>>> TRANSFER ENDED");
             }
             this.kill();
         }
@@ -338,7 +338,7 @@ public class TransferMultiSender{
     }
 
     public void changeOwnIP(ArrayList<InetAddress> addresses, boolean isLinkLocal, int linkSpeed){
-        System.out.println("\t\t\tCHANGING IP!!");
+        System.out.println("\t\t\t(TMS) CHANGING IP!!");
         if(!addresses.contains(this.ownIP)){
             InetAddress newIP = null;
 
@@ -352,25 +352,13 @@ public class TransferMultiSender{
 
                 this.ownIP = newIP;
 
-/*                    if(this.unicastSocket != null) {
-                    this.unicastSocket.close();
-                    System.out.println("CLOSED UNICASTSOCKET!!");
-                }
-
-                this.unicastSocket = new DatagramSocket(null);
-                InetSocketAddress isa = new InetSocketAddress(newIP, this.ownUnicastPort);
-                this.unicastSocket.bind(isa); // EXCEPTION already bound!!
-*/
                 changeIP(this.ownIP, linkSpeed);
 
-                System.out.println("hasConnection? " + this.hasConnection);
+                System.out.println("(TMS) hasConnection? " + this.hasConnection);
 
                 this.hasConnection = true;
-                /*Thread t = new Thread(this);
-                t.start();
-                System.out.println("CHANGED IP AND CREATED NEW THREAD");*/
 
-                System.out.println("GOT NEW IP =>" + this.ownIP + "\nhasConnection? " + this.hasConnection);
+                System.out.println("(TMS) GOT NEW IP =>" + this.ownIP + "\nhasConnection? " + this.hasConnection);
 
 
                 for(FastUnicastSender fus : this.fastSenders)
@@ -378,14 +366,14 @@ public class TransferMultiSender{
 
             }
             else {
-                System.out.println("NEW IP SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
+                System.out.println("(TMS) NEW IP SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
                 updateConnectionStatus(false);
             }
         }
         else {
-            System.out.println("SAME IP AS BEFORE");
+            System.out.println("(TMS) SAME IP AS BEFORE");
             if (!this.hasConnection) {
-                System.out.println("    BUT HAD NO CONNECTION (hasConnection => TRUE)");
+                System.out.println("    (TMS) BUT HAD NO CONNECTION (hasConnection => TRUE)");
                 updateConnectionStatus(true);
             }
         }
@@ -408,8 +396,9 @@ public class TransferMultiSender{
 
         for (int i = 0; i < 5; i++) {
             try {
+                System.out.println("(TMS) ==============================================>>>>>>SENDING A NETWORKSTATUSUPDATE");
                 this.sch.sendDP(this.nicName, this.transferID, this.ownIP, this.ownPort, packet);
-                Thread.sleep(5);
+                Thread.sleep(10);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
