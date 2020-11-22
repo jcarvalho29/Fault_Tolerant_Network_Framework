@@ -214,7 +214,7 @@ public class FastUnicastListener implements Runnable {
     public void changeDatagramPacketsArraySize(int rtt, int dps){
         //500 = 2/1000
         rtt = Math.min(rtt, 5000);
-        int newDatagramPacketsArraySize = ((dps * rtt) / 500); // EXCEPTION!!!!!!!
+        int newDatagramPacketsArraySize = Math.max(((dps * rtt) / 500), 1000); // EXCEPTION!!!!!!!
         byte[][] tmp = null;
         try {
             tmp = new byte[newDatagramPacketsArraySize][];
@@ -231,12 +231,13 @@ public class FastUnicastListener implements Runnable {
 
             System.arraycopy(this.datagramPacketsArray, 0, datagramPacketsArrayCopy, 0, this.pointer);
 
-            this.datagramPacketsArray = tmp;
-            this.datagramPacketsArraySize = newDatagramPacketsArraySize;
-            this.pointer = 0;
-
             this.Overflow.add(datagramPacketsArrayCopy);
         }
+
+        this.datagramPacketsArray = tmp;
+        this.datagramPacketsArraySize = newDatagramPacketsArraySize;
+        this.pointer = 0;
+
         this.arrayLock.unlock();
     }
 

@@ -506,29 +506,45 @@ public class Scheduler {
             this.tms_Lock.lock();
             ArrayList<Integer> transferIDs = this.transferID_byNIC.get(nic.name);
             this.tms_Lock.unlock();
-
+            System.out.println("got transferID");
             int numberOfTransferIDs = transferIDs.size();
             int transferID;
 
             for (int i = 0; i < numberOfTransferIDs; i++) {
+                System.out.println("cycle start");
                 transferID = transferIDs.get(i);
+                System.out.println("GOT TRANSFERID");
                 this.smi_Lock.lock();
+                System.out.println("GOT SMI LOCK");
                 transm = this.smi.onGoingTransmissions.get(transferID);
+                System.out.println("GOT ON GOING TRANSMISSION");
                 this.smi_Lock.unlock();
 
                 this.tms_Lock.lock();
+                System.out.println("GOT TMS LOCK");
                 tms = this.tms_byTransferID.get(transferID);
+                System.out.println("GOT TMS");
                 this.tms_Lock.unlock();
 
-                tms.changeOwnIP(ips, transm.destIP.isLinkLocalAddress(), nic.getActiveTransferSpeed());
+                System.out.println("BEFORE CHANGEIP");
+                int speed = nic.getActiveTransferSpeed();
+                System.out.println("GOT SPEED");
+                boolean b = transm.destIP.isLinkLocalAddress();
+                System.out.println("GOT ISLINKLOCAL");
+                tms.changeOwnIP(ips, b, speed);
+                System.out.println("AFTER CHANGEIP");
             }
 
+            System.out.println("before getting ip listeners");
             SchedulerIPListener sch1 = this.ipListeners_byNIC.get(nic.name);
             SchedulerIPListener sch2 = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
+            System.out.println("before changing ip listeners ip");
             sch1.changeOwnIP(ips);
             sch2.changeOwnIP(ips);
 
+            System.out.println("before reactivating nics");
             reactivateNICIPListeners(nic);
+            System.out.println("CHANGED IP");
         }
     }
 

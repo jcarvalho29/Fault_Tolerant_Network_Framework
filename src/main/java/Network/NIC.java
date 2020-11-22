@@ -570,10 +570,11 @@ public class NIC {
             this.nicSpeed_Lock.lock();
             sp = this.speed ;
             this.nicSpeed_Lock.unlock();
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            if(sp == -1) {
+                if(this.isWireless)
+                    getWirelessStatus();
+                else
+                    getWiredSpeed();
             }
         }
 
@@ -588,10 +589,11 @@ public class NIC {
             this.nicSpeed_Lock.lock();
             sp = this.speed;
             this.nicSpeed_Lock.unlock();
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            if(sp == -1) {
+                if(this.isWireless)
+                    getWirelessStatus();
+                else
+                    getWiredSpeed();
             }
         }
         sp /= (this.activeTransfers + 1);

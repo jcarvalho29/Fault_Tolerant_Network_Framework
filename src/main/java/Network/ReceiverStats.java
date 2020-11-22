@@ -2,6 +2,7 @@ package Network;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ReceiverStats {
 
@@ -54,7 +55,9 @@ public class ReceiverStats {
 
     public long bytesReceived;
 
-    public ArrayList<Integer> dpsPerCycle;
+    private ReentrantLock dpsPerCycle_Lock;
+    private ArrayList<Integer> dpsPerCycle;
+    private int currentDPS;
 
     public ReceiverStats(NIC nic, int senderConnectionSpeed, int numberOfMissingChunks){
 
@@ -91,9 +94,10 @@ public class ReceiverStats {
         this.firstRetransmittedCMReceiveTime = new ArrayList<Long>();
         this.retransmissionRTT = new ArrayList<Integer>();
 
+        this.dpsPerCycle_Lock = new ReentrantLock();
         this.dpsPerCycle = new ArrayList<Integer>();
 
-        registerNewDPS(calculateDPS());
+        calculateDPS();
     }
 
     public void markProtocolStartTime(){
@@ -261,11 +265,12 @@ public class ReceiverStats {
     }
 
     public int calculateDPS(){
+        this.dpsPerCycle_Lock.lock();
         int nicSpeed = this.nic.getActiveTransferSpeed();
 
-        int limiterLinkSpeed = Math.min(nicSpeed, senderConnectionSpeed);
+        int limiterLinkSpeed = Math.min(nicSpeed, this.senderConnectionSpeed);
         System.out.println("NIC SPEED " + nicSpeed);
-        System.out.println("SENDER SPEED " + senderConnectionSpeed);
+        System.out.println("SENDER SPEED " + this.senderConnectionSpeed);
 
         int capacityInDPS = ((limiterLinkSpeed*1000000)/(this.averageDPSize*8));
 
@@ -275,11 +280,11 @@ public class ReceiverStats {
         }
 
         int maxDPSPerListener = (Math.max(capacityInDPS/this.numberOfListeners, 10));
-        System.out.println("capacityDPS / numberOfListeners " + capacityInDPS + " / " + this.numberOfListeners + " = " + (capacityInDPS/this.numberOfListeners));
+        System.out.println("capacityDPS / numberOfListeners " + capacityInDPS + " / " + this.numberOfListeners + " = " + maxDPSPerListener);
         //CHANGE aqui é para ser feito o calculo do novo DPS tendo em conta todos os dados disponíveis!!!!
 
-/*        if(!this.dpsPerCycle.isEmpty()) {
-            float currentDropRate = this.drops_PerTransferCycle.get(this.drops_PerTransferCycle.size() - 1);
+        if(!this.dpsPerCycle.isEmpty()) {
+            float currentDropRate = this.drops_PerTransferCycle.get(this.drops_PerTransferCycle.size() - 1) / 100;
 
             if (currentDropRate > 0.1 && currentDropRate < 0.2)
                 currentDropRate = (float) 0.1;
@@ -289,9 +294,10 @@ public class ReceiverStats {
                 else
                     currentDropRate = 0;
 
+            System.out.println("DPS AFTER DROP CALCULATION ( " + currentDropRate + " )" + (maxDPSPerListener* (1-currentDropRate)));
             maxDPSPerListener = (int) Math.max(maxDPSPerListener * (1 - currentDropRate), 10);
 
-            *//*
+            /*
             int lowerLimit = (int) (currentDPS - (currentDPS * .1));
             int upperLimit = (int) (currentDPS + (currentDPS * .1));
 
@@ -303,33 +309,41 @@ public class ReceiverStats {
                     maxDPSPerListener = Math.max((int) (maxDPSPerListener * 1.05), 10);
                 else
                     maxDPSPerListener = Math.max((int) (maxDPSPerListener * (currentDropRate * 2)), 10);
-            }*//*
-        }*/
-/*        if(!this.dpsPerCycle.isEmpty()) {
-            int currentDPS = this.dpsPerCycle.get(this.dpsPerCycle.size() - 1);
+            }*/
+        }
+        if(!this.dpsPerCycle.isEmpty()) {
 
-            if ((maxDPSPerListener < currentDPS * 0.9 || maxDPSPerListener > currentDPS * 1.1) && Math.abs(maxDPSPerListener - currentDPS) > 800) {
+            if (Math.abs(maxDPSPerListener - this.currentDPS) < 800) {
+                maxDPSPerListener = this.currentDPS;
+                System.out.println("GOT SAME DPS => " + maxDPSPerListener);
             }
             else {
-                maxDPSPerListener = currentDPS;
+                this.currentDPS = maxDPSPerListener;
+                System.out.println("GOT NEW DPS => " + maxDPSPerListener);
             }
-            registerNewDPS(maxDPSPerListener);
         }
         else
-            registerNewDPS(maxDPSPerListener);*/
-        registerNewDPS(maxDPSPerListener);
+            this.currentDPS = maxDPSPerListener;
 
-        System.out.println("GOT DPS => " + maxDPSPerListener);
+
+        System.out.println("DPS => " + maxDPSPerListener + " VS " + this.currentDPS);
+        this.dpsPerCycle_Lock.unlock();
+
         return maxDPSPerListener;
     }
 
     public int getDPS(){
-        return this.dpsPerCycle.get(this.dpsPerCycle.size()-1);
+        this.dpsPerCycle_Lock.lock();
+        int dps = this.currentDPS;
+        this.dpsPerCycle_Lock.unlock();
+        return dps;
     }
 
-    private void registerNewDPS(int newDPS){
-        this.dpsPerCycle.add(newDPS);
-        System.out.println("DPS/LISTENER " + newDPS);
+    public void registerNewDPS(){
+        this.dpsPerCycle_Lock.lock();
+        this.dpsPerCycle.add(this.currentDPS);
+        this.dpsPerCycle_Lock.unlock();
+        //System.out.println("DPS/LISTENER " + newDPS);
     }
 
     public int getNumberOfListeners() {

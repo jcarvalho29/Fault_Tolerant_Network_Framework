@@ -138,7 +138,7 @@ public class TransferReceiverManager implements Runnable{
         if(calculateDPS){
             int avgRTT = this.stats.getAverageRTT();
             dps = this.stats.getDPS();
-            int newDPS = dps;// this.stats.calculateDPS();
+            int newDPS = this.stats.calculateDPS();
 
             if(dps != newDPS) {
                 for (FastUnicastListener ful : this.fastListeners)
@@ -320,6 +320,7 @@ public class TransferReceiverManager implements Runnable{
     }
 
     private void updateCycleStats(){
+        this.stats.registerNewDPS();
 
         if(this.stats.getNumberOfTransferCycles() > 1) {
             long min = Long.MAX_VALUE;
@@ -347,8 +348,8 @@ public class TransferReceiverManager implements Runnable{
             }
         }
         else{
-            for(FastUnicastListener fus : this.fastListeners)
-                fus.resetFirstCMReceivedTimestamp();
+            for(FastUnicastListener ful : this.fastListeners)
+                ful.resetFirstCMReceivedTimestamp();
         }
 
         //System.out.println("Marked cycle end");
