@@ -352,7 +352,7 @@ public class TransferMultiSender{
 
                 this.ownIP = newIP;
 
-                changeIP(this.ownIP, linkSpeed);
+                sendNetworkUpdateStatus(this.ownIP, linkSpeed);
 
                 System.out.println("(TMS) hasConnection? " + this.hasConnection);
 
@@ -387,7 +387,7 @@ public class TransferMultiSender{
             fus.changeHasConnection(value);
     }
 
-    public void changeIP(InetAddress newIP, int LinkSpeed){
+    public void sendNetworkUpdateStatus(InetAddress newIP, int LinkSpeed){
         //enviar multiplos ipchanges ao receptor para que este saiba que mudei de IP
         NetworkStatusUpdate nsu = new NetworkStatusUpdate(this.transferID, newIP, LinkSpeed);
         byte[] serializedIPC = getBytesFromObject(nsu);

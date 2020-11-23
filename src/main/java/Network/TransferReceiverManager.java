@@ -417,7 +417,7 @@ public class TransferReceiverManager implements Runnable{
     private void sendOver(boolean wasInterrupted) {
 
         //CHANGE
-        this.nic.registerTransferEnd();
+        this.nic.registerTransmissionEnd();
 
         Over over = new Over(this.tmi.transferID, wasInterrupted);
 
@@ -444,7 +444,7 @@ public class TransferReceiverManager implements Runnable{
         }
         this.stats.markProtocolEndTime();
         this.stats.printStats();
-
+        this.nic.registerReceptionEnd();
     }
 
     public void startReceiverManager() {

@@ -112,7 +112,7 @@ public class Scheduler {
         this.tms_Lock.unlock();
 
         this.smi_Lock.lock();
-        this.smi.scheduledTransmissions.keySet().forEach(transferID -> nic.registerTransferSchedule());
+        this.smi.scheduledTransmissions.keySet().forEach(transferID -> nic.registerTransmissionSchedule());
 
         SchedulerIPListener sch1 = createNICIPListeners(nic);
         SchedulerIPListener sch2 = createNICIPListeners_LINKLOCAL(nic);
@@ -431,7 +431,8 @@ public class Scheduler {
         System.out.println(nic.name + " SPEED " + nic.speed);
         this.smi_Lock.lock();
         for(int transferID : transferMetaInfos.keySet()){
-            nicSpeed = nic.getNewTransferSpeed();
+            nicSpeed = nic.getNewTransmissionSpeed();
+            //System.out.println("NEW TRANSFER SPEED => " + nicSpeed);
             t = this.smi.scheduledTransmissions.get(transferID);
             tmi = transferMetaInfos.get(transferID);
             tmi.setFirstLinkConnection(nicSpeed);
@@ -506,45 +507,28 @@ public class Scheduler {
             this.tms_Lock.lock();
             ArrayList<Integer> transferIDs = this.transferID_byNIC.get(nic.name);
             this.tms_Lock.unlock();
-            System.out.println("got transferID");
             int numberOfTransferIDs = transferIDs.size();
             int transferID;
 
             for (int i = 0; i < numberOfTransferIDs; i++) {
-                System.out.println("cycle start");
                 transferID = transferIDs.get(i);
-                System.out.println("GOT TRANSFERID");
                 this.smi_Lock.lock();
-                System.out.println("GOT SMI LOCK");
                 transm = this.smi.onGoingTransmissions.get(transferID);
-                System.out.println("GOT ON GOING TRANSMISSION");
                 this.smi_Lock.unlock();
 
                 this.tms_Lock.lock();
-                System.out.println("GOT TMS LOCK");
                 tms = this.tms_byTransferID.get(transferID);
-                System.out.println("GOT TMS");
                 this.tms_Lock.unlock();
 
-                System.out.println("BEFORE CHANGEIP");
-                int speed = nic.getActiveTransferSpeed();
-                System.out.println("GOT SPEED");
-                boolean b = transm.destIP.isLinkLocalAddress();
-                System.out.println("GOT ISLINKLOCAL");
-                tms.changeOwnIP(ips, b, speed);
-                System.out.println("AFTER CHANGEIP");
+                tms.changeOwnIP(ips, transm.destIP.isLinkLocalAddress(), nic.getActiveTransmissionSpeed());
             }
 
-            System.out.println("before getting ip listeners");
             SchedulerIPListener sch1 = this.ipListeners_byNIC.get(nic.name);
             SchedulerIPListener sch2 = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
-            System.out.println("before changing ip listeners ip");
             sch1.changeOwnIP(ips);
             sch2.changeOwnIP(ips);
 
-            System.out.println("before reactivating nics");
             reactivateNICIPListeners(nic);
-            System.out.println("CHANGED IP");
         }
     }
 
@@ -589,6 +573,19 @@ public class Scheduler {
 
     }
 
+    private void updateSameNICTransferSpeeds(String nicName, int newTransferSpeed) {
+
+        this.tms_Lock.lock();
+        ArrayList<Integer> transferIDs = this.transferID_byNIC.get(nicName);
+        TransferMultiSender tms;
+
+        for(int transferID : transferIDs){
+            tms = this.tms_byTransferID.get(transferID);
+            tms.sendNetworkUpdateStatus(tms.ownIP, newTransferSpeed);
+        }
+        this.tms_Lock.unlock();
+    }
+
     /*
      * Schedules the transmission of the information based on its destination IP and priority
      * */
@@ -604,7 +601,7 @@ public class Scheduler {
             createTMIDP(t);
             this.nics_Lock.lock();
             for (NIC nic : this.nics.values()) {
-                nic.registerTransferSchedule();
+                nic.registerTransmissionSchedule();
                 nic.markSchedulerAsActive();
                 reactivateNICIPListeners(nic);
             }
@@ -625,19 +622,24 @@ public class Scheduler {
         int numberOfSchdT = this.smi.scheduledTransmissions.size();
         this.smi_Lock.unlock();
 
-        if(numberOfSchdT == 0)
+        if(numberOfSchdT == 0) {
             for(NIC nic : this.nics.values())
                 checkIPListeners(nic);
+        }
+
+        int newTransferSpeed = 0;
 
         this.nics_Lock.lock();
         for(NIC nic : this.nics.values())
             if(!nic.name.equals(nicName))
-                nic.registerTransferCancel();
-            else
-                nic.registerTransferStart();
-
+                nic.registerTransmissionCancel();
+            else {
+                nic.registerTransmissionStart();
+                newTransferSpeed = nic.getActiveTransmissionSpeed();
+            }
         this.nics_Lock.unlock();
 
+        updateSameNICTransferSpeeds(nicName, newTransferSpeed);
         removeTMIDP(transmission);
 
         printSchedule();
@@ -654,11 +656,15 @@ public class Scheduler {
 
         createTMIDP(t);
 
+        int newTransferSpeed = 0;
+
         this.nics_Lock.lock();
         for(NIC nic : this.nics.values()) {
-            if(nic.name.equals(nicName))
-                nic.registerTransferEnd();
-            nic.registerTransferStart();
+            if(nic.name.equals(nicName)) {
+                nic.registerTransmissionEnd();
+                newTransferSpeed = nic.getActiveTransmissionSpeed();
+            }
+            nic.registerTransmissionStart();
             nic.markSchedulerAsActive();
 
             reactivateNICIPListeners(nic);
@@ -679,6 +685,7 @@ public class Scheduler {
 
         this.tms_Lock.unlock();
 
+        updateSameNICTransferSpeeds(nicName,  newTransferSpeed);
 
         printSchedule();
         updateSchedulerMetaInfoFile();
@@ -697,8 +704,12 @@ public class Scheduler {
 
         this.tms_Lock.lock();
 
+        int newTransferSpeed = 0;
+        NIC nic;
         this.nics_Lock.lock();
-        this.nics.get(nicName).registerTransferEnd();
+        nic = this.nics.get(nicName);
+        nic.registerTransmissionEnd();
+        newTransferSpeed = nic.getActiveTransmissionSpeed();
         this.nics_Lock.unlock();
 
         ArrayList<Integer> tmsIDs = this.transferID_byNIC.get(nicName);
@@ -709,13 +720,15 @@ public class Scheduler {
             this.transferID_byNIC.put(nicName, tmsIDs);
 
             if(numberofSchT == 0)
-                for(NIC nic : this.nics.values())
-                    checkIPListeners(nic);
+                for(NIC n : this.nics.values())
+                    checkIPListeners(n);
 
             this.tms_byTransferID.remove(transferID);
         }
 
         this.tms_Lock.unlock();
+
+        updateSameNICTransferSpeeds(nicName, newTransferSpeed);
 
         printSchedule();
         updateSchedulerMetaInfoFile();

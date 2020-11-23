@@ -26,9 +26,13 @@ public class NIC {
     public int speed;
     private int mtu;
 
-    private ReentrantLock nicSpeed_Lock;
-    private int scheduledTransfers;
-    private int activeTransfers;
+    private ReentrantLock nicTransmissionSpeed_Lock;
+    private int scheduledTransmissions;
+    private int activeTransmissions;
+
+    private ReentrantLock nicReceptionSpeed_Lock;
+    private int activeReception;
+
     /*private ArrayList<Integer> scheduledTransferIDs;
     private ArrayList<Integer> activeTransferIDs;
     private HashMap<Integer, Float> nicSpeed_byTransferID;*/
@@ -60,9 +64,13 @@ public class NIC {
         this.speed = -1;
         this.mtu = -1;
 
-        this.nicSpeed_Lock = new ReentrantLock();
-        this.scheduledTransfers = 0;
-        this.activeTransfers = 0;
+        this.nicTransmissionSpeed_Lock = new ReentrantLock();
+        this.scheduledTransmissions = 0;
+        this.activeTransmissions = 0;
+
+        this.nicReceptionSpeed_Lock = new ReentrantLock();
+        this.activeReception = 0;
+
         /*this.transferID_byOrder = new ArrayList<Integer>();
         this.nicSpeed_byTransferID = new HashMap<Integer, Float>();*/
 
@@ -541,35 +549,38 @@ public class NIC {
 
         return sp;
     }*/
-    public void registerTransferSchedule(){
-        this.nicSpeed_Lock.lock();
-        this.scheduledTransfers++;
-        this.nicSpeed_Lock.unlock();
+
+    //TRANSMISSION SPEED
+
+    public void registerTransmissionSchedule(){
+        this.nicTransmissionSpeed_Lock.lock();
+        this.scheduledTransmissions++;
+        this.nicTransmissionSpeed_Lock.unlock();
     }
-    public void registerTransferCancel() {
-        this.nicSpeed_Lock.lock();
-        this.scheduledTransfers--;
-        this.nicSpeed_Lock.unlock();
+    public void registerTransmissionCancel() {
+        this.nicTransmissionSpeed_Lock.lock();
+        this.scheduledTransmissions--;
+        this.nicTransmissionSpeed_Lock.unlock();
     }
-    public void registerTransferStart(){
-        this.nicSpeed_Lock.lock();
-        this.scheduledTransfers--;
-        this.activeTransfers++;
-        this.nicSpeed_Lock.unlock();
+    public void registerTransmissionStart(){
+        this.nicTransmissionSpeed_Lock.lock();
+        this.scheduledTransmissions--;
+        this.activeTransmissions++;
+        this.nicTransmissionSpeed_Lock.unlock();
     }
-    public void registerTransferEnd() {
-        this.nicSpeed_Lock.lock();
-        this.activeTransfers--;
-        this.nicSpeed_Lock.unlock();
+    public void registerTransmissionEnd() {
+        this.nicTransmissionSpeed_Lock.lock();
+        this.activeTransmissions--;
+        this.nicTransmissionSpeed_Lock.unlock();
     }
 
-    public int getActiveTransferSpeed(){
+    public int getActiveTransmissionSpeed(){
         int sp = -1;
 
         while(sp == -1) {
-            this.nicSpeed_Lock.lock();
+            this.nicTransmissionSpeed_Lock.lock();
             sp = this.speed ;
-            this.nicSpeed_Lock.unlock();
+            this.nicTransmissionSpeed_Lock.unlock();
             if(sp == -1) {
                 if(this.isWireless)
                     getWirelessStatus();
@@ -578,17 +589,19 @@ public class NIC {
             }
         }
 
-        sp /= this.activeTransfers;
+        if(this.activeTransmissions != 0)
+            sp /= this.activeTransmissions;
+
         return sp;
     }
 
-    public int getNewTransferSpeed(){
+    public int getNewTransmissionSpeed(){
         int sp = -1;
 
         while(sp == -1) {
-            this.nicSpeed_Lock.lock();
+            this.nicTransmissionSpeed_Lock.lock();
             sp = this.speed;
-            this.nicSpeed_Lock.unlock();
+            this.nicTransmissionSpeed_Lock.unlock();
             if(sp == -1) {
                 if(this.isWireless)
                     getWirelessStatus();
@@ -596,16 +609,50 @@ public class NIC {
                     getWiredSpeed();
             }
         }
-        sp /= (this.activeTransfers + 1);
+        sp /= (this.activeTransmissions + 1);
+        return sp;
+    }
+
+    //RECEPTION SPEED
+
+    public void registerReceptionStart(){
+        this.nicReceptionSpeed_Lock.lock();
+        this.activeReception++;
+        this.nicReceptionSpeed_Lock.unlock();
+    }
+    public void registerReceptionEnd() {
+        this.nicReceptionSpeed_Lock.lock();
+        this.activeReception--;
+        this.nicReceptionSpeed_Lock.unlock();
+    }
+
+    public int getActiveReceptionSpeed(){
+        int sp = -1;
+
+        while(sp == -1) {
+            this.nicReceptionSpeed_Lock.lock();
+            sp = this.speed ;
+            this.nicReceptionSpeed_Lock.unlock();
+            if(sp == -1) {
+                if(this.isWireless)
+                    getWirelessStatus();
+                else
+                    getWiredSpeed();
+            }
+        }
+
+        if(this.activeReception != 0)
+            sp /= this.activeReception;
+
         return sp;
     }
 
     public int getNICFirstLinkConnectionSpeed(){
         int speed;
 
-        this.nicSpeed_Lock.lock();
+        this.nicTransmissionSpeed_Lock.lock();
         speed = this.speed;
-        this.nicSpeed_Lock.unlock();
+        this.nicTransmissionSpeed_Lock.unlock();
 
         return speed;
     }

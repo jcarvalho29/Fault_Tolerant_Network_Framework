@@ -1,7 +1,6 @@
 package Network;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ReceiverStats {
@@ -266,7 +265,7 @@ public class ReceiverStats {
 
     public int calculateDPS(){
         this.dpsPerCycle_Lock.lock();
-        int nicSpeed = this.nic.getActiveTransferSpeed();
+        int nicSpeed = this.nic.getActiveReceptionSpeed();
 
         int limiterLinkSpeed = Math.min(nicSpeed, this.senderConnectionSpeed);
         System.out.println("NIC SPEED " + nicSpeed);

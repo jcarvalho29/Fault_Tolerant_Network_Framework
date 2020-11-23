@@ -167,6 +167,7 @@ public class ListenerMainUnicast implements Runnable{
             //CHANGE PARA ACEITAR OUTROS USOS DE HASH ALGORITHMS ??
 
             if (!this.receivedIDs.contains(tmi.transferID)) {
+                this.nic.registerReceptionStart();
                 this.receivedIDs.add(tmi.transferID);
 
                 if (!this.dm.hasChunkManager(tmi.cmmi.Hash)) {
@@ -177,7 +178,7 @@ public class ListenerMainUnicast implements Runnable{
                         this.dm.newMessage(tmi.cmmi.Hash, tmi.cmmi.datagramMaxSize, tmi.cmmi.numberOfChunks);
                 }
 
-                this.nic.registerTransferStart();
+                this.nic.registerTransmissionStart();
                 TransferReceiverManager trm = new TransferReceiverManager(this, this.dm, this.currentIP, dp.getAddress(), dp.getPort(), this.nic, tmi);
                 trm.startReceiverManager();
                 System.out.println("TRM STARTED");
