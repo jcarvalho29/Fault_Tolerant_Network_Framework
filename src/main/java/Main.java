@@ -91,6 +91,7 @@ public class Main{
 
                     case 7:{
                         km = startKnockManager(nics);
+                        new Thread(km).start();
                         break;
                     }
 

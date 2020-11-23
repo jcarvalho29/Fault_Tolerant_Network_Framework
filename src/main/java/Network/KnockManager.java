@@ -2,9 +2,7 @@ package Network;
 
 import Messages.Knock;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Random;
@@ -17,6 +15,7 @@ public class KnockManager implements Runnable{
     private boolean hasConnection;
 
     private boolean isIPv6;
+    private NetworkInterface netInterface;
     private MulticastSocket mcs;
     private InetAddress mcGroupIP;
     private int mcGroupPort;
@@ -36,6 +35,14 @@ public class KnockManager implements Runnable{
 
         this.nic = nic;
 
+        this.hasConnection = nic.hasConnection;
+        if(this.hasConnection) {
+            try {
+                this.netInterface = NetworkInterface.getByName(nic.name);
+            } catch (SocketException e) {
+                e.printStackTrace();
+            }
+        }
         this.mcGroupIP = mcGroupIP;
 
         this.isIPv6 = this.mcGroupIP instanceof Inet6Address;
@@ -62,14 +69,29 @@ public class KnockManager implements Runnable{
 
         while(!bound) {
             try {
-                this.mcs = new MulticastSocket(null);
+                this.mcs = new MulticastSocket(this.mcGroupPort);
+                //this.mcs.setInterface(this.ownIP);
+                //this.mcs.setNetworkInterface(this.netInterface);
+                //InetSocketAddress isa = new InetSocketAddress(this.mcGroupIP, this.mcGroupPort);
+                //this.mcs.joinGroup(isa, this.netInterface);
                 this.mcs.setInterface(this.ownIP);
                 this.mcs.joinGroup(this.mcGroupIP);
                 System.out.println("(KNOCKMANAGER) BOUND MULTICASTSOCKET TO " + this.mcGroupIP + ":" + this.mcGroupPort);
                 bound = true;
-                this.hasConnection = true;
             } catch (IOException e) {
                 System.out.println("(KNOCKMANAGER) ERROR BINDING MULTICASTSOCKET TO " + this.mcGroupIP + ":" + this.mcGroupPort);
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void closeMulticastSocket(){
+        if(this.mcs != null && !this.mcs.isClosed()){
+            try {
+                this.mcs.leaveGroup(this.mcGroupIP);
+                this.mcs.close();
+
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
@@ -90,13 +112,13 @@ public class KnockManager implements Runnable{
                 System.out.println("(KNOCKMANAGER) BOUND DATAGRAMSOCKET TO " + this.ownIP + ":" + this.ownPort);
 
                 bound = true;
-                this.hasConnection = true;
             } catch (IOException e) {
                 System.out.println("(KNOCKMANAGER) ERROR BINDING DATAGRAMSOCKET TO " + this.ownIP + ":" + this.ownPort);
                 e.printStackTrace();
 
                 try {
                     this.ownPort = -1;
+
                     Thread.sleep(500);
                 } catch (InterruptedException interruptedException) {
                     interruptedException.printStackTrace();
@@ -124,14 +146,14 @@ public class KnockManager implements Runnable{
                     this.ds.close();
                 }
 
+                closeMulticastSocket();
+
                 bindUnicastDatagramSocket();
                 bindMulticastGroupSocket();
 
                 System.out.println("hasConnection? " + this.hasConnection + " => TRUE");
 
                 updateConnectionStatus(true);
-
-                System.out.println("CHANGED IP AND CREATED NEW THREAD (changeIP)");
 
                 System.out.println("Listening to NEW IP =>" + this.ownIP + " PORT =>" + this.ownPort + "\nhasConnection? " + this.hasConnection);
 
@@ -152,8 +174,8 @@ public class KnockManager implements Runnable{
     }
 
     public void updateConnectionStatus(boolean value){
-
         if(value && !this.hasConnection){
+            closeMulticastSocket();
             bindUnicastDatagramSocket();
             bindMulticastGroupSocket();
 
@@ -164,9 +186,10 @@ public class KnockManager implements Runnable{
                 if(this.ds != null)
                     this.ds.close();
                 if(this.mcs != null)
-                    this.mcs.close();
+                    closeMulticastSocket();
             }
         }
+        this.hasConnection = value;
     }
 
     public void changeKnockInfo(byte[] newKnockInfo){
@@ -208,14 +231,14 @@ public class KnockManager implements Runnable{
             while (!dpSent){
                 try {
                     mcs = new MulticastSocket();
-                    mcs.setInterface(this.ownIP);
+                    mcs.setNetworkInterface(this.netInterface);
                     this.knockInfo_Lock.lock();
-                    Knock k = new Knock(this.knockInfo);
+                    Knock k = new Knock(this.ownPort, this.knockInfo);
                     byte[] bytes = getBytesFromObject(k);
                     DatagramPacket mcDP = new DatagramPacket(bytes, bytes.length, this.mcGroupIP, this.mcGroupPort);
-                    System.out.println("MULTICAST SENT TO " + this.mcGroupIP + ":" + this.mcGroupPort);
                     this.knockInfo_Lock.unlock();
                     mcs.send(mcDP);
+                    System.out.println("MULTICAST SENT TO " + this.mcGroupIP + ":" + this.mcGroupPort);
                     mcs.close();
                     dpSent = true;
                 } catch (IOException e) {
@@ -261,9 +284,12 @@ public class KnockManager implements Runnable{
 
     private void sendKnockResponse(DatagramPacket dp) {
         this.knockInfo_Lock.lock();
-        Knock k = new Knock(this.knockInfo);
+        Knock k = (Knock) getObjectFromBytes(dp.getData());
+        int responsePort = k.responsePort;
+        k = new Knock(-1, this.knockInfo);
         byte[] bytes = getBytesFromObject(k);
-        DatagramPacket ResponseDP = new DatagramPacket(bytes, bytes.length, dp.getAddress(), dp.getPort());
+        DatagramPacket ResponseDP = new DatagramPacket(bytes, bytes.length, dp.getAddress(), responsePort);
+        System.out.println("SENDING UNICAST KNOCK TO " + dp.getAddress() + ":" + responsePort);
         this.knockInfo_Lock.unlock();
 
         if(!this.ds.isClosed() && this.hasConnection){
@@ -305,15 +331,18 @@ public class KnockManager implements Runnable{
                 dp = new DatagramPacket(buf, MTU);
 
                 this.mcs.receive(dp);
-
+                System.out.println("    RECEIVED MULTICAST");
                 this.dpRecivedMC_Lock.lock();
                 this.dpReceivedMC.add(dp);
                 this.dpRecivedMC_Lock.unlock();
 
-                System.out.println("received MULTICAST");
                 sendKnockResponse(dp);
 
-            } catch (IOException e) {
+            }
+            catch (SocketException se){
+                System.out.println(" => MULTICAST SOCKET CLOSED");
+            }
+            catch (IOException e) {
                 e.printStackTrace();
             }
         }
@@ -352,5 +381,39 @@ public class KnockManager implements Runnable{
         }
 
         return bos.toByteArray();
+    }
+
+    private Object getObjectFromBytes(byte[] data){
+        if(data == null || data.length == 0) {
+            System.out.println("                MENSAGEM VAZIA WHATTTTTTTTTTTTTT " + (data==null) + " " + data.length);
+            try {
+                Thread.sleep(100000000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        ByteArrayInputStream bis = new ByteArrayInputStream(data);
+        ObjectInput in = null;
+        Object o = null;
+
+        try {
+            in = new ObjectInputStream(bis);
+            o = in.readObject(); //EXCEPTION!!!! java.io.EOFException
+        }
+        catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        finally {
+            try {
+                if (in != null) {
+                    in.close();
+                }
+            }
+            catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        return o;
     }
 }
