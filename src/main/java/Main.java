@@ -131,7 +131,7 @@ public class Main{
             nicNames = nicFolder.list();
             if(nicNames != null) {
                 for (String nicName : nicNames)
-                    if (!nicName.equals("lo") && !nicName.equals("enp2s0")) {
+                    if (!nicName.equals("lo")) {
                         wirelessFolder = new File(nicPath + nicName + wirelessPath);
                         if (wirelessFolder.exists() && wirelessFolder.isDirectory())
                             nics.add(new NIC(nicName, true, sc));
