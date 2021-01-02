@@ -6,6 +6,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ReceiverStats {
 
     private  NIC nic;
+    private int numberOfCPUCores;
     private int senderConnectionSpeed;
     private boolean isSenderConnectionWireless;
     private int numberOfListeners;
@@ -58,9 +59,10 @@ public class ReceiverStats {
     private ArrayList<Integer> dpsPerCycle;
     private int currentDPS;
 
-    public ReceiverStats(NIC nic, int senderConnectionSpeed, int numberOfMissingChunks){
+    public ReceiverStats(NIC nic, byte numberOfCPUCores, int senderConnectionSpeed, int numberOfMissingChunks){
 
         this.nic = nic;
+        this.numberOfCPUCores = numberOfCPUCores;
         this.senderConnectionSpeed = senderConnectionSpeed;
         //this.isSenderConnectionWireless = isSenderConnectionWireless;
 
@@ -274,7 +276,8 @@ public class ReceiverStats {
         int capacityInDPS = ((limiterLinkSpeed*1000000)/(this.averageDPSize*8));
 
         if(this.dpsPerCycle.isEmpty()) {
-            this.numberOfListeners = (int) Math.round(((float)capacityInDPS/6000) + 0.5);
+            int maxCores = Math.min(this.numberOfCPUCores, Runtime.getRuntime().availableProcessors());
+            this.numberOfListeners = Math.min((int) Math.round(((float)capacityInDPS/6000) + 0.5), maxCores);
             System.out.println("capacityDPS/ 10000 ( " + capacityInDPS + " / 10000) = " + this.numberOfListeners);
         }
 

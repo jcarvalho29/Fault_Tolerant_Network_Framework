@@ -51,7 +51,7 @@ public class TransferReceiverManager implements Runnable{
         this.dm = dm;
 
         this.nic = nic;
-        this.stats = new ReceiverStats(this.nic, tmi.firstLinkSpeed, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
+        this.stats = new ReceiverStats(this.nic, tmi.numberOfCPUCores, tmi.firstLinkSpeed, dm.documents.get(tmi.cmmi.Hash).cm.getNumberOfMissingChunks());
 
         this.destIP = destIP;
         this.destPort = destPort;

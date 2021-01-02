@@ -9,7 +9,7 @@ public class TransferMetaInfo implements Serializable {
     public int transferID;
 
     public int firstLinkSpeed;
-    //public boolean isWireless;
+    public byte numberOfCPUCores;
 
     public ChunkManagerMetaInfo cmmi;
     public String DocumentName;
@@ -27,12 +27,12 @@ public class TransferMetaInfo implements Serializable {
         this.Confirmation = confirmation;
     }*/
 
-    public TransferMetaInfo(int nodeIdentifier, int transferID, ChunkManagerMetaInfo cmmmi, String documentName, boolean confirmation) {
+    public TransferMetaInfo(int nodeIdentifier, byte numberOfCPUCores, int transferID, ChunkManagerMetaInfo cmmmi, String documentName, boolean confirmation) {
         this.nodeIdentifier = nodeIdentifier;
         this.transferID = transferID;
 
         this. firstLinkSpeed = 10;
-        //this.isWireless = true;
+        this.numberOfCPUCores = numberOfCPUCores;
 
         this.cmmi = cmmmi;
         this.DocumentName = documentName;

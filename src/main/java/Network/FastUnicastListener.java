@@ -86,7 +86,7 @@ public class FastUnicastListener implements Runnable {
                     this.ds = new DatagramSocket(null);
                     InetSocketAddress isa = new InetSocketAddress(newIP, this.port);
                     this.ds.bind(isa); // !!!! ADDRESS ALREADY IN USE
-                    System.out.println("(FASTUNICASTLISTENER) BOUND TO " + this.ip + ":" + this.port);
+                    //System.out.println("(FASTUNICASTLISTENER) BOUND TO " + this.ip + ":" + this.port);
                     this.ds.setReceiveBufferSize(3000000);
 
                     this.ip = newIP;
@@ -94,7 +94,7 @@ public class FastUnicastListener implements Runnable {
                     this.arrayLock.unlock();
                 } catch (SocketException e) {
                     //e.printStackTrace();
-                    System.out.println("(FASTUNICASTLISTENER) ERROR BINDING TO " + this.ip + ":" + this.port);
+                    //System.out.println("(FASTUNICASTLISTENER) ERROR BINDING TO " + this.ip + ":" + this.port);
                 }
 
                 if(!bound){
@@ -153,16 +153,16 @@ public class FastUnicastListener implements Runnable {
                 System.out.println("                =>FUL EXCEPTION                         SOCKET CLOSED");
                 this.arrayLock.lock();
                 this.arrayLock.unlock();
-                System.out.println("unlock arrayLock");
+                //System.out.println("unlock arrayLock");
             }
             catch (Exception e){
                 e.printStackTrace();
                 this.arrayLock.lock();
                 this.arrayLock.unlock();
-                System.out.println("unlock arrayLock");
+                //System.out.println("unlock arrayLock");
             }
         }
-        System.out.println("FASTLISTENER DIED");
+        //System.out.println("FASTLISTENER DIED");
 
     }
 

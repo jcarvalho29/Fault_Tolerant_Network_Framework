@@ -70,8 +70,8 @@ public class FastUnicastSender implements Runnable{
             this.consecutiveSends = 1;
         }
 
-        System.out.println("SleepTime " + this.sleeptimeMilliSeconds);
-        System.out.println("Consecutive Sends " + this.consecutiveSends);
+        /*System.out.println("SleepTime " + this.sleeptimeMilliSeconds);
+        System.out.println("Consecutive Sends " + this.consecutiveSends);*/
         this.dpsLock = new ReentrantLock();
 
         this.cm = cm;
@@ -120,7 +120,7 @@ public class FastUnicastSender implements Runnable{
     }
 
     public void changeDestIP(InetAddress newDestIP){
-        System.out.println("NEW DEST IP | OLD => " + this.destIP + "vs NEW => " + newDestIP);
+        //System.out.println("NEW DEST IP | OLD => " + this.destIP + "vs NEW => " + newDestIP);
 
         this.destIP = newDestIP;
 
@@ -132,7 +132,7 @@ public class FastUnicastSender implements Runnable{
     }
 
     public void changeOwnIP(InetAddress newOwnIP){
-        System.out.println("\t\t\tCHANGE OWNIP CALLED IN FASTSENDER");
+        //System.out.println("\t\t\tCHANGE OWNIP CALLED IN FASTSENDER");
         boolean bound = false;
 
         this.ownIP = newOwnIP;
@@ -149,12 +149,12 @@ public class FastUnicastSender implements Runnable{
                 this.ds.bind(isa);
                 bound = true;
                 this.ds.setSendBufferSize(3000000);
-                System.out.println("(FASTUNICASTSENDER) BOUND TO " + this.ownIP + ":" + this.ownPort);
+                //System.out.println("(FASTUNICASTSENDER) BOUND TO " + this.ownIP + ":" + this.ownPort);
                 //changeHasConnection(true);
                 this.packetLock.unlock();
 
             } catch (SocketException e) {
-                System.out.println("(FASTUNICASTSENDER) ERROR BINDING TO " + this.ownIP + ":" + this.ownPort);
+                //System.out.println("(FASTUNICASTSENDER) ERROR BINDING TO " + this.ownIP + ":" + this.ownPort);
                 e.printStackTrace();
             }
 
@@ -178,7 +178,7 @@ public class FastUnicastSender implements Runnable{
     }
 
     public void run() {
-        System.out.println("\tNEW FASTSENDER CREATED");
+        //System.out.println("\tNEW FASTSENDER CREATED");
         this.isRunning_lock.lock();
         this.isRunning = true;
         this.isRunning_lock.unlock();
@@ -197,27 +197,27 @@ public class FastUnicastSender implements Runnable{
         System.out.println("\t( PRESELECTED NULL? " + (this.preSelectedChunkIDs == null) + " )");
         System.out.println("\t( CHUNKSTOSEND NULL? " + (this.chunksToSend == null) + " )");
 */
-        System.out.println("CHUNKS ALREADY LOADED? ");
+        //System.out.println("CHUNKS ALREADY LOADED? ");
         if(this.chunksToSend == null) {
-            System.out.println("NO");
-            System.out.println("\tNEED TO LOAD CHUNKS?");
+            //System.out.println("NO");
+            //System.out.println("\tNEED TO LOAD CHUNKS?");
             if ((this.chunkArrays.size() == 0 && this.chunkIDsArray.size() > 0) || this.preSelectedChunkIDs != null) {
-                System.out.println("\tYES");
-                System.out.println("\t\tDO I HAVE PRESELECTED CHUNKS?");
+                //System.out.println("\tYES");
+                //System.out.println("\t\tDO I HAVE PRESELECTED CHUNKS?");
 
                 if (this.preSelectedChunkIDs == null) {
-                    System.out.println("\t\tNO");
+                    //System.out.println("\t\tNO");
                     this.preSelectedChunkIDs = this.chunkIDsArray.get(0);
                     this.chunkIDsArray.remove(0);
                 }
-                else {
+               /* else {
                     System.out.println("\t\tYES");
-                }
+                }*/
 
                 if (this.preSelectedChunkIDs.length < chunksToLoad) {
                     chunks = this.cm.getMissingChunks(this.preSelectedChunkIDs);
                     this.preSelectedChunkIDs = null;
-                    System.out.println("PRESELECTED A NULL");
+                    //System.out.println("PRESELECTED A NULL");
                 }
                 else {
                     chunks = this.cm.getMissingChunks(copyArrayListSection(this.preSelectedChunkIDs, chunksToLoad));
@@ -228,11 +228,11 @@ public class FastUnicastSender implements Runnable{
                 this.chunkPointer = 0;
                 chunks = null;
             }
-            else
-                System.out.println("\tNO");
+            /*else
+                System.out.println("\tNO");*/
         }
-        else
-            System.out.println("YES");
+        /*else
+            System.out.println("YES");*/
         this.chunkIDsLock.unlock();
 
         int accumulatedOverSleep = (int)(System.currentTimeMillis() - initialLoadStart);
@@ -295,11 +295,11 @@ public class FastUnicastSender implements Runnable{
                         } catch (SocketException se) {
                             se.printStackTrace();
                             this.hasConnection = false;////!!!!!!!!!!????????
-                            System.out.println("CHANGED hasConnection to false");
+                            //System.out.println("CHANGED hasConnection to false");
                         } catch (IOException e) {
                             //e.printStackTrace();
                             this.hasConnection = false;////!!!!!!!!!!????????
-                            System.out.println("NO CONNECTION ( hasConnection " + this.hasConnection + " )");
+                            //System.out.println("NO CONNECTION ( hasConnection " + this.hasConnection + " )");
                         }
                         finally {
                             this.packetLock.unlock();
@@ -378,16 +378,16 @@ public class FastUnicastSender implements Runnable{
             }
         this.isRunning = false;
         this.isRunning_lock.unlock();
-        System.out.println("FAST SENDER DEAD hasConnection? " + hasConnection + " run? " + run);
+        /*System.out.println("FAST SENDER DEAD hasConnection? " + hasConnection + " run? " + run);
 
         System.out.println("\t( CHUNKARRAYS SIZE " + this.chunkArrays.size() + " )");
         System.out.println("\t( CHUNKIDSARRAY SIZE " + this.chunkIDsArray.size() + " )");
         System.out.println("\t( PRESELECTED NULL? " + (this.preSelectedChunkIDs == null) + " )");
-        System.out.println("\t( CHUNKSTOSEND NULL? " + (this.chunksToSend == null) + " )");
+        System.out.println("\t( CHUNKSTOSEND NULL? " + (this.chunksToSend == null) + " )");*/
     }
 
     public void kill(){
-        System.out.println("KILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILL");
+        //System.out.println("KILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILLKILL");
 
         this.isRunning_lock.lock();
         this.run = false;

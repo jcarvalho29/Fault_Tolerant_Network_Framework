@@ -703,7 +703,6 @@ public class ChunkManager {
 
     public ArrayList<CompressedMissingChunksID> getCompressedMissingChunksID(int maxSize){
         int totalNumberOfChunks = this.mi.numberOfChunks;
-        boolean [] missingChunks = new boolean[totalNumberOfChunks];
 
         ArrayList<CompressedMissingChunksID> res = new ArrayList<CompressedMissingChunksID>();
 
@@ -723,6 +722,7 @@ public class ChunkManager {
             res = null;
         else{
             int sizeParam = 4 * maxSize;
+            boolean [] missingChunks = new boolean[totalNumberOfChunks];
 
             while(res.size() != 1 && (actualMaxSize > maxSize || actualMaxSize < maxSize*0.5)) {
                 res.clear();

@@ -16,6 +16,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Scheduler {
     private final int nodeIdentifier;
+    private int numberOfCPUCores;
     private DataManager dm;
 
     private ReentrantLock smi_Lock;
@@ -66,6 +67,7 @@ public class Scheduler {
         }
 
         this.dm = dm;
+        this.numberOfCPUCores = Runtime.getRuntime().availableProcessors();
 
         this.nics_Lock = new ReentrantLock();
         this.nics = new HashMap<String, NIC>();
@@ -172,7 +174,7 @@ public class Scheduler {
         }
 
         cmmi.missingChunks = null;
-        TransferMetaInfo tmi = new TransferMetaInfo(this.nodeIdentifier, t.transferID, cmmi, docName, t.confirmation);
+        TransferMetaInfo tmi = new TransferMetaInfo(this.nodeIdentifier, (byte)this.numberOfCPUCores, t.transferID, cmmi, docName, t.confirmation);
         System.out.println("GOT NEW TMI");
         /*byte[] serializedData = getBytesFromObject(tmi);
         DatagramPacket dp = new DatagramPacket(serializedData, serializedData.length, t.destIP, t.destPort);*/

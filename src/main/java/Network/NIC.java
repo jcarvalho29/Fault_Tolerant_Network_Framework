@@ -371,7 +371,7 @@ public class NIC {
                                 lineParams = aux[i].split("  ");
                                 String[] speed = lineParams[0].split("=")[1].split(" ");
                                 this.statsLock.lock();
-                                if(speed[1].equals("Kb/s")) {
+                                if(speed[1].equals("kb/s")) {
                                     this.w_BitRate = 1;
                                     this.speed = 1;
                                 }

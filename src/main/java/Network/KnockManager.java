@@ -76,10 +76,10 @@ public class KnockManager implements Runnable{
                 //this.mcs.joinGroup(isa, this.netInterface);
                 this.mcs.setInterface(this.ownIP);
                 this.mcs.joinGroup(this.mcGroupIP);
-                System.out.println("(KNOCKMANAGER) BOUND MULTICASTSOCKET TO " + this.mcGroupIP + ":" + this.mcGroupPort);
+                //System.out.println("(KNOCKMANAGER) BOUND MULTICASTSOCKET TO " + this.mcGroupIP + ":" + this.mcGroupPort);
                 bound = true;
             } catch (IOException e) {
-                System.out.println("(KNOCKMANAGER) ERROR BINDING MULTICASTSOCKET TO " + this.mcGroupIP + ":" + this.mcGroupPort);
+                //System.out.println("(KNOCKMANAGER) ERROR BINDING MULTICASTSOCKET TO " + this.mcGroupIP + ":" + this.mcGroupPort);
                 e.printStackTrace();
             }
         }
@@ -109,11 +109,11 @@ public class KnockManager implements Runnable{
                 this.ds = new DatagramSocket(null);
                 InetSocketAddress isa = new InetSocketAddress(this.ownIP, this.ownPort);
                 this.ds.bind(isa);
-                System.out.println("(KNOCKMANAGER) BOUND DATAGRAMSOCKET TO " + this.ownIP + ":" + this.ownPort);
+                //System.out.println("(KNOCKMANAGER) BOUND DATAGRAMSOCKET TO " + this.ownIP + ":" + this.ownPort);
 
                 bound = true;
             } catch (IOException e) {
-                System.out.println("(KNOCKMANAGER) ERROR BINDING DATAGRAMSOCKET TO " + this.ownIP + ":" + this.ownPort);
+                //System.out.println("(KNOCKMANAGER) ERROR BINDING DATAGRAMSOCKET TO " + this.ownIP + ":" + this.ownPort);
                 e.printStackTrace();
 
                 try {
@@ -142,7 +142,7 @@ public class KnockManager implements Runnable{
                 this.ownIP = ip;
 
                 if(this.ds != null && !this.ds.isClosed()) {
-                    System.out.println("UNICASTSOCKET WASN'T CLOSED BEFORE THE CHANGEIP BIND");
+                    //System.out.println("UNICASTSOCKET WASN'T CLOSED BEFORE THE CHANGEIP BIND");
                     this.ds.close();
                 }
 
@@ -151,23 +151,23 @@ public class KnockManager implements Runnable{
                 bindUnicastDatagramSocket();
                 bindMulticastGroupSocket();
 
-                System.out.println("hasConnection? " + this.hasConnection + " => TRUE");
+                //System.out.println("hasConnection? " + this.hasConnection + " => TRUE");
 
                 updateConnectionStatus(true);
 
-                System.out.println("Listening to NEW IP =>" + this.ownIP + " PORT =>" + this.ownPort + "\nhasConnection? " + this.hasConnection);
+                //System.out.println("Listening to NEW IP =>" + this.ownIP + " PORT =>" + this.ownPort + "\nhasConnection? " + this.hasConnection);
 
             }
             else {
-                System.out.println("NEW ADDRESSES SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
+                //System.out.println("NEW ADDRESSES SET BUT NO CORRESPONDING IP (hasConnection => FALSE)");
                 this.ownIP = null;
                 updateConnectionStatus(false);
             }
         }
         else {
-            System.out.println("SAME IP AS BEFORE");
+            //System.out.println("SAME IP AS BEFORE");
             if (!this.hasConnection) {
-                System.out.println("    BUT HAD NO CONNECTION (hasConnection => TRUE)");
+                //System.out.println("    BUT HAD NO CONNECTION (hasConnection => TRUE)");
                 updateConnectionStatus(true);
             }
         }
@@ -256,7 +256,7 @@ public class KnockManager implements Runnable{
                     this.ds.receive(dp);
 
                     receivedDP.add(dp);
-                    System.out.println("RECEIVED UNICAST");
+                    //System.out.println("RECEIVED UNICAST");
 
                 } catch (SocketException e) {
                     //e.printStackTrace();
@@ -265,7 +265,7 @@ public class KnockManager implements Runnable{
                     break;
                 }
             }
-            System.out.println("(KNOCKMANAGER) UNICAST DIED hasConnection? " + this.hasConnection);
+            //System.out.println("(KNOCKMANAGER) UNICAST DIED hasConnection? " + this.hasConnection);
             return receivedDP;
         }
 
@@ -289,7 +289,7 @@ public class KnockManager implements Runnable{
         k = new Knock(-1, this.knockInfo);
         byte[] bytes = getBytesFromObject(k);
         DatagramPacket ResponseDP = new DatagramPacket(bytes, bytes.length, dp.getAddress(), responsePort);
-        System.out.println("SENDING UNICAST KNOCK TO " + dp.getAddress() + ":" + responsePort);
+        //System.out.println("SENDING UNICAST KNOCK TO " + dp.getAddress() + ":" + responsePort);
         this.knockInfo_Lock.unlock();
 
         if(!this.ds.isClosed() && this.hasConnection){
@@ -297,11 +297,11 @@ public class KnockManager implements Runnable{
                 this.ds.send(ResponseDP);
             } catch (IOException e) {
                 e.printStackTrace();
-                System.out.println("(KNOCKMANAGER) ERROR SENDING RESPONSE KNOCK hasConnection " + this.hasConnection + " ds.isClosed() "+ this.ds.isClosed());
+                //System.out.println("(KNOCKMANAGER) ERROR SENDING RESPONSE KNOCK hasConnection " + this.hasConnection + " ds.isClosed() "+ this.ds.isClosed());
             }
         }
-        else
-            System.out.println("(KNOCKMANAGER) COULD NOT RESPOND TO MULTICAST KNOCK hasConnection " + this.hasConnection + " ds.isClosed() "+ this.ds.isClosed());
+        //else
+        //System.out.println("(KNOCKMANAGER) COULD NOT RESPOND TO MULTICAST KNOCK hasConnection " + this.hasConnection + " ds.isClosed() "+ this.ds.isClosed());
     }
 
     public void run(){
@@ -331,7 +331,7 @@ public class KnockManager implements Runnable{
                 dp = new DatagramPacket(buf, MTU);
 
                 this.mcs.receive(dp);
-                System.out.println("    RECEIVED MULTICAST");
+                //System.out.println("    RECEIVED MULTICAST");
                 this.dpRecivedMC_Lock.lock();
                 this.dpReceivedMC.add(dp);
                 this.dpRecivedMC_Lock.unlock();
@@ -340,14 +340,14 @@ public class KnockManager implements Runnable{
 
             }
             catch (SocketException se){
-                System.out.println(" => MULTICAST SOCKET CLOSED");
+                //System.out.println(" => MULTICAST SOCKET CLOSED");
             }
             catch (IOException e) {
                 e.printStackTrace();
             }
         }
 
-        System.out.println("(KNOCKMANAGER) MULTICAST LISTENER DIED run? " + this.run + " mcs.isCLosed()? " + this.mcs.isClosed() + " hasConnection? " + this.hasConnection);
+        //System.out.println("(KNOCKMANAGER) MULTICAST LISTENER DIED run? " + this.run + " mcs.isCLosed()? " + this.mcs.isClosed() + " hasConnection? " + this.hasConnection);
     }
 
     public void kill(){

@@ -66,12 +66,24 @@ public class SchedulerIPListener implements Runnable{
                 System.out.println("(SECHDULERIPLISTENER) BOUND TO " + this.ownIP + ":" + this.ownPort);
                 this.hasConnection = true;
                 bound = true;
+                this.lockPort = true;
             }
             catch (SocketException e) {
                 System.out.println("(SCHEDULERIPLISTENER) ERROR BINDING TO " + this.ownIP + ":" + this.ownPort);
                 if(!this.lockPort){
                     this.ownPort = -1;
-                    this.lockPort = true;
+                }
+
+                if(this.nic.hasConnection) {
+                    ArrayList<InetAddress> ips;
+                    if (this.ownIP.isLinkLocalAddress())
+                        ips = this.nic.getLinkLocalAddresses();
+                    else
+                        ips = this.nic.getNONLinkLocalAddresses();
+                    if(!ips.contains(this.ownIP)){
+                        changeOwnIP(ips);
+                        bound = true;
+                    }
                 }
                 e.printStackTrace();
             }
