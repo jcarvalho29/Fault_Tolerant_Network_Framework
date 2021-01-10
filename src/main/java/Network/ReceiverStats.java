@@ -317,18 +317,18 @@ public class ReceiverStats {
 
             if (Math.abs(maxDPSPerListener - this.currentDPS) < 800) {
                 maxDPSPerListener = this.currentDPS;
-                System.out.println("GOT SAME DPS => " + maxDPSPerListener);
+                //System.out.println("GOT SAME DPS => " + maxDPSPerListener);
             }
             else {
                 this.currentDPS = maxDPSPerListener;
-                System.out.println("GOT NEW DPS => " + maxDPSPerListener);
+                //System.out.println("GOT NEW DPS => " + maxDPSPerListener);
             }
         }
         else
             this.currentDPS = maxDPSPerListener;
 
 
-        System.out.println("DPS => " + maxDPSPerListener + " VS " + this.currentDPS);
+        //System.out.println("DPS => " + maxDPSPerListener + " VS " + this.currentDPS);
         this.dpsPerCycle_Lock.unlock();
 
         return maxDPSPerListener;
@@ -363,20 +363,20 @@ public class ReceiverStats {
         System.out.println("Drop % => " + dropPercentage() + "%");
         System.out.println("Handshake RTT => " + this.handshakeRTT + " ms");
         System.out.println("Average RTT => " + getAverageRTT() + " ms");
-        System.out.println(this.MCIDsSendTime);
-        System.out.println(this.firstRetransmittedCMReceiveTime);
+/*        System.out.println(this.MCIDsSendTime);
+        System.out.println(this.firstRetransmittedCMReceiveTime);*/
         System.out.println("Protocol Speed => " + bytesPerSecondProtocol()/1024 + " KB/s");
         System.out.println("Transfer Speed => " + bytesPerSecondTransfer()/1024 + " KB/s");
 
-        System.out.println("Drops per Transfer Cycle:");
+        System.out.println("Stats per Transfer Cycle:");
 
-        System.out.println(this.transferCycleStartTime.size());
+/*        System.out.println(this.transferCycleStartTime.size());
         System.out.println(this.transferCyclesDuration.size());
         System.out.println(this.transferCycleEndTime.size());
         System.out.println(this.dpReceived_PerTransferCycle.size());
         System.out.println(this.dpExpected_PerTransferCycle.size());
         System.out.println(this.drops_PerTransferCycle.size());
-        System.out.println(this.dpsPerCycle.size());
+        System.out.println(this.dpsPerCycle.size());*/
 
 
         for(int i = 0; i < this.transferCycleEndTime.size(); i++){

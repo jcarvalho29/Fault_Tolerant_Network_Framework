@@ -38,6 +38,8 @@ public class Scheduler {
     private HashMap<Integer, TransferMetaInfo> transferMetaInfos;
     private HashMap<Integer, TransferMetaInfo> transferMetaInfos_LINKLOCAL;
 
+    private HashMap<Integer, Long> TMIS_SendTimestamp;
+    private ArrayList<DatagramPacket> datagramPackets;
     private ScheduledExecutorService tmiScheduler;
 
     private Random rand;
@@ -91,6 +93,8 @@ public class Scheduler {
         this.datagramPackets_LINKLOCAL_Lock = new ReentrantLock();
         this.transferMetaInfos = new HashMap<Integer, TransferMetaInfo>();
         this.transferMetaInfos_LINKLOCAL = new HashMap<Integer, TransferMetaInfo>();
+        this.datagramPackets = new ArrayList<DatagramPacket>();
+        this.TMIS_SendTimestamp = new HashMap<Integer, Long>();
 
         this.tmiScheduler = Executors.newSingleThreadScheduledExecutor();
         this.tmiScheduler.scheduleWithFixedDelay(sendTMIs, 0, 3, TimeUnit.SECONDS);
@@ -240,7 +244,7 @@ public class Scheduler {
                 this.tms_Lock.unlock();
 
                 moveToOngoing(nic.name, t);
-                tms.processTransferMultiReceiverInfo(tmri, receivingTime);
+                tms.processTransferMultiReceiverInfo(tmri, this.TMIS_SendTimestamp.get(tmri.transferID), receivingTime);
             }
             else
                 this.tms_Lock.unlock();
@@ -379,10 +383,13 @@ public class Scheduler {
 
     private final Runnable sendTMIs = () -> {
 
-        ArrayList<DatagramPacket> datagramPackets;
+
         SchedulerIPListener sch;
         this.datagramPackets_Lock.lock();
         this.datagramPackets_LINKLOCAL_Lock.lock();
+        ArrayList<Integer> TMIs_ID = new ArrayList<Integer>();
+
+        int numberOfDP;
 
         if(!this.transferMetaInfos.values().isEmpty()) {
             System.out.println("TRYING TO SEND TMIS");
@@ -391,41 +398,50 @@ public class Scheduler {
                 //System.out.println("NIC hasConnection?" + nic.hasConnection);
                 if(nic.hasConnection) {
                     sch = this.ipListeners_byNIC.get(nic.name);
-                    datagramPackets = createDatagramPackets(nic.name, this.transferMetaInfos);
-                    for (DatagramPacket dp : datagramPackets) {
-                        //System.out.println("CCC222");
-                        sch.sendDP(dp);
+                    this.datagramPackets.clear();
+                    TMIs_ID = createDatagramPackets(nic.name, this.transferMetaInfos);
+
+                    numberOfDP = this.datagramPackets.size();
+                    for(int i = 0; i < numberOfDP; i++){
+                        sch.sendDP(this.datagramPackets.get(i));
+                        this.TMIS_SendTimestamp.remove(TMIs_ID.get(i));
+                        this.TMIS_SendTimestamp.put(TMIs_ID.get(i), System.currentTimeMillis());
                     }
                 }
             }
         }
+
+        TMIs_ID.clear();
 
         if(!this.transferMetaInfos_LINKLOCAL.values().isEmpty()) {
             System.out.println("TRYING TO SEND LINKLOCAL TMIS");
             //LINKLOCAL
-            for(NIC nic: this.nics.values()){
+            for(NIC nic : this.nics.values()){
+                //System.out.println("NIC hasConnection?" + nic.hasConnection);
                 if(nic.hasConnection) {
                     sch = this.ipListeners_LINKLOCAL_byNIC.get(nic.name);
-                    datagramPackets = createDatagramPackets(nic.name, this.transferMetaInfos_LINKLOCAL);
-                    //System.out.println("AAA");
+                    this.datagramPackets.clear();
+                    TMIs_ID = createDatagramPackets(nic.name, this.transferMetaInfos_LINKLOCAL);
 
-                    for (DatagramPacket dp : datagramPackets) {
-                        //System.out.println("CCC222");
-                        sch.sendDP(dp);
+                    numberOfDP = this.datagramPackets.size();
+                    for(int i = 0; i < numberOfDP; i++){
+                        sch.sendDP(this.datagramPackets.get(i));
+                        this.TMIS_SendTimestamp.remove(TMIs_ID.get(i));
+                        this.TMIS_SendTimestamp.put(TMIs_ID.get(i), System.currentTimeMillis());
                     }
                 }
             }
         }
 
-
+        this.datagramPackets.clear();
         this.datagramPackets_Lock.unlock();
         this.datagramPackets_LINKLOCAL_Lock.unlock();
     };
 
-    private ArrayList<DatagramPacket> createDatagramPackets(String nicName, HashMap<Integer, TransferMetaInfo> transferMetaInfos){
+    private ArrayList<Integer> createDatagramPackets(String nicName, HashMap<Integer, TransferMetaInfo> transferMetaInfos){
         NIC nic = this.nics.get(nicName);
         int nicSpeed;
-        ArrayList<DatagramPacket> dps = new ArrayList<DatagramPacket>();
+        ArrayList<Integer> ids = new ArrayList<Integer>();
         Transmission t;
         byte[] data;
         TransferMetaInfo tmi;
@@ -439,11 +455,12 @@ public class Scheduler {
             tmi = transferMetaInfos.get(transferID);
             tmi.setFirstLinkConnection(nicSpeed);
             data = getBytesFromObject(tmi);
-            dps.add(new DatagramPacket(data, data.length, t.destIP, t.destPort));
+            this.datagramPackets.add(new DatagramPacket(data, data.length, t.destIP, t.destPort));
+            ids.add(transferID);
         }
         this.smi_Lock.unlock();
 
-        return dps;
+        return ids;
     }
 
     private void reactivateNICIPListeners(NIC nic){

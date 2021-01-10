@@ -97,7 +97,12 @@ public class Main{
 
                     case 8:{
                         if(km != null) {
-                            System.out.println("MAIN" + km.searchForTimePeriod(10));
+                            ArrayList <DatagramPacket> DPs = km.searchForTimePeriod(10);
+                            System.out.println("MAIN");
+                            for(DatagramPacket dp :DPs){
+                                System.out.println("    Origem : " + dp.getAddress());
+                                System.out.println("    Tamanho dos Dados : " + dp.getData().length + "\n");
+                            }
                         }
                         break;
                     }

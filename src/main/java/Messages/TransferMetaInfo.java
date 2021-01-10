@@ -27,14 +27,14 @@ public class TransferMetaInfo implements Serializable {
         this.Confirmation = confirmation;
     }*/
 
-    public TransferMetaInfo(int nodeIdentifier, byte numberOfCPUCores, int transferID, ChunkManagerMetaInfo cmmmi, String documentName, boolean confirmation) {
+    public TransferMetaInfo(int nodeIdentifier, byte numberOfCPUCores, int transferID, ChunkManagerMetaInfo cmmi, String documentName, boolean confirmation) {
         this.nodeIdentifier = nodeIdentifier;
         this.transferID = transferID;
 
         this. firstLinkSpeed = 10;
         this.numberOfCPUCores = numberOfCPUCores;
 
-        this.cmmi = cmmmi;
+        this.cmmi = cmmi;
         this.DocumentName = documentName;
         this.Confirmation = confirmation;
     }

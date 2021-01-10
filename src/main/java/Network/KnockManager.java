@@ -332,11 +332,16 @@ public class KnockManager implements Runnable{
 
                 this.mcs.receive(dp);
                 //System.out.println("    RECEIVED MULTICAST");
-                this.dpRecivedMC_Lock.lock();
-                this.dpReceivedMC.add(dp);
-                this.dpRecivedMC_Lock.unlock();
+                if(!dp.getAddress().equals(this.ownIP)) {
+                    System.out.println("Recevi Knock Multicast");
+                    System.out.println("    Origem : " + dp.getAddress());
+                    System.out.println("    Tamanho dos Dados : " + dp.getData().length + "\n");
+                    this.dpRecivedMC_Lock.lock();
+                    this.dpReceivedMC.add(dp);
+                    this.dpRecivedMC_Lock.unlock();
 
-                sendKnockResponse(dp);
+                    sendKnockResponse(dp);
+                }
 
             }
             catch (SocketException se){

@@ -120,12 +120,12 @@ public class TransferMultiSender{
         }
     };
 
-    public void processTransferMultiReceiverInfo(TransferMultiReceiverInfo tmri, long receiveTime){
+    public void processTransferMultiReceiverInfo(TransferMultiReceiverInfo tmri, long sendTime, long receiveTime){
 
         this.TMRI_Lock.lock();
         this.receivedTransferMultiReceiverInfo = true;
         this.TMRI_Lock.unlock();
-
+        this.stats.setTmiSendTime(sendTime);
         this.stats.setTrmiReceiveTime(receiveTime);
         System.out.println("(TMS) RTT => " + this.stats.handshakeRTT);
         int[] mc;
