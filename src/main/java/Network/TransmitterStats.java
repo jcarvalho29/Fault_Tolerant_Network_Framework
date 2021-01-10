@@ -6,9 +6,11 @@ public class TransmitterStats {
 
     public int handshakeRTT;
 
+    public TransmitterStats(){
+    }
 
-    public void markTmiSendTime(){
-        this.tmiSendTime = System.currentTimeMillis();
+    public void setTmiSendTime(long timestamp){
+        this.tmiSendTime = timestamp;
     }
 
     public void setTrmiReceiveTime(long timestamp){
@@ -16,7 +18,8 @@ public class TransmitterStats {
         calculateHandshakeRTT();
     }
     private void calculateHandshakeRTT(){
-        this.handshakeRTT = (int)(this.tmiSendTime - this.trmiReceiveTime);
+        this.handshakeRTT = (int)(this.trmiReceiveTime - this.tmiSendTime);
+        System.out.println("CALCULATING RTT " + this.trmiReceiveTime + " - " + this.tmiSendTime + " = " + this.handshakeRTT);
     }
 
 }
